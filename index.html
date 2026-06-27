@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Тест на биохимический тип личности</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+
+    <!-- ЭКРАН 1: ВСТУПЛЕНИЕ -->
+    <section id="intro" class="screen active">
+      <div class="card intro-card">
+        <div class="badge">Нейропрофиль</div>
+        <h1>Тест на биохимический<br />тип личности</h1>
+        <p class="lead">
+          Полный тест из 200 утверждений. Отвечайте «Да» или «Нет» — и узнайте
+          свой профиль по четырём нейромедиаторам и активную долю мозга.
+        </p>
+        <ul class="facts">
+          <li><span>≈20</span> минут</li>
+          <li><span>200</span> вопросов</li>
+          <li><span>4</span> нейромедиатора</li>
+        </ul>
+        <label class="field">
+          <span>Ваше ФИО</span>
+          <input id="nameInput" type="text" placeholder="Введите имя и фамилию" autocomplete="name" />
+        </label>
+        <p id="nameError" class="error" hidden>Пожалуйста, введите ваше ФИО</p>
+        <button id="startBtn" class="btn btn-primary btn-block">Начать тест</button>
+        <p class="hint subtle">Отвечайте искренне — здесь нет «правильных» ответов.</p>
+      </div>
+    </section>
+
+    <!-- ЭКРАН 2: ВОПРОСЫ -->
+    <section id="quiz" class="screen">
+      <div class="quiz-top">
+        <div class="progress">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <div class="progress-meta">
+          <button id="backBtn" class="btn-text" aria-label="Назад">← Назад</button>
+          <span id="counter">Вопрос 1 из 60</span>
+        </div>
+      </div>
+
+      <div class="card quiz-card" id="quizCard">
+        <p class="q-index" id="qIndex">01</p>
+        <h2 class="question" id="questionText">—</h2>
+      </div>
+
+      <div class="answers">
+        <button id="noBtn" class="btn btn-answer btn-no">Нет</button>
+        <button id="yesBtn" class="btn btn-answer btn-yes">Да</button>
+      </div>
+      <p class="hint subtle">Подсказка: клавиша <b>1</b> — Да, <b>2</b> — Нет</p>
+    </section>
+
+    <!-- ЭКРАН 3: РЕЗУЛЬТАТ -->
+    <section id="result" class="screen">
+      <div class="card result-card">
+        <p class="result-eyebrow">Ваш результат</p>
+        <h2 id="dominantTitle" class="dominant-title">—</h2>
+        <p id="dominantMeta" class="dominant-meta">—</p>
+        <p id="dominantDesc" class="dominant-desc">—</p>
+      </div>
+
+      <div class="card chart-card">
+        <h3 class="chart-title">Профиль нейромедиаторов</h3>
+        <div class="chart-wrap">
+          <canvas id="chart"></canvas>
+        </div>
+        <ul id="scoreList" class="score-list"></ul>
+        <p id="lowNote" class="low-note"></p>
+      </div>
+
+      <div class="result-actions">
+        <button id="downloadBtn" class="btn btn-secondary">Скачать график</button>
+        <button id="restartBtn" class="btn btn-primary">Пройти заново</button>
+      </div>
+      <p id="saveStatus" class="hint subtle"></p>
+    </section>
+
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
