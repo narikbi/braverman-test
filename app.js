@@ -1,32 +1,38 @@
 // ============================================================
-//  НАСТРОЙКА: вставьте сюда URL вашего Google Apps Script Web App.
-//  Инструкция — в README.md. Пока поле не заполнено, результаты
-//  не отправляются, но тест полностью работает.
+//  НАСТРОЙКА: URL вашего Google Apps Script Web App.
+//  Инструкция — в README.md.
 // ============================================================
 const SHEET_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzoufS3rbkK19yHu3lwpzjL8VKOo-bA262nsatcqPZ1XF-UUA21mLlc6gISv_6VBFWLpA/exec';
 
 const STORAGE_KEY = 'braverman_progress_v1';
+const LANG_KEY = 'braverman_lang';
 
 // ---------- Состояние ----------
+let lang = localStorage.getItem(LANG_KEY) || 'ru';
+if (!CONTENT[lang]) lang = 'ru';
+
 const state = {
   name: '',
-  order: buildOrder(),   // 60 вопросов, перемешанных round-robin
-  answers: [],           // 0 | 1 для каждого вопроса
+  order: [],   // заполняется в applyLang()
+  answers: [],
   index: 0
 };
 
 let chartInstance = null;
 
+// Текущий языковой пакет
+const T = () => CONTENT[lang];
+
 // Строит единый список вопросов: по одному из каждого блока по кругу,
 // чтобы подряд не шли тематически однородные пункты (тест ощущается цельным).
+// Индексы одинаковы во всех языках, поэтому ответы при смене языка не теряются.
 function buildOrder() {
+  const Q = T().questions;
   const order = [];
-  const maxLen = Math.max(...NEURO_ORDER.map((k) => QUESTIONS[k].length));
+  const maxLen = Math.max(...NEURO_ORDER.map((k) => Q[k].length));
   for (let i = 0; i < maxLen; i++) {
     for (const key of NEURO_ORDER) {
-      if (i < QUESTIONS[key].length) {
-        order.push({ neuro: key, text: QUESTIONS[key][i] });
-      }
+      if (i < Q[key].length) order.push({ neuro: key, text: Q[key][i] });
     }
   }
   return order;
@@ -34,16 +40,69 @@ function buildOrder() {
 
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
-const screens = {
-  intro: $('intro'),
-  quiz: $('quiz'),
-  result: $('result')
-};
+const screens = { intro: $('intro'), quiz: $('quiz'), result: $('result') };
 
 function showScreen(name) {
   Object.values(screens).forEach((s) => s.classList.remove('active'));
   screens[name].classList.add('active');
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ---------- Язык ----------
+function renderLangSwitch() {
+  const box = $('langSwitch');
+  box.innerHTML = '';
+  LANGS.forEach((l) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'lang-btn' + (l.code === lang ? ' active' : '');
+    b.textContent = l.label;
+    b.addEventListener('click', () => setLang(l.code));
+    box.appendChild(b);
+  });
+}
+
+function setLang(code) {
+  if (!CONTENT[code] || code === lang) return;
+  lang = code;
+  try { localStorage.setItem(LANG_KEY, code); } catch (e) {}
+  applyLang();
+}
+
+// Проставляет все статичные надписи из языкового пакета
+function applyLang() {
+  const u = T().ui;
+
+  document.documentElement.lang = lang;
+  document.title = u.htmlTitle;
+
+  $('t-badge').textContent = u.badge;
+  $('t-h1').innerHTML = u.h1;
+  $('t-lead').textContent = u.lead;
+  $('t-factMinutes').textContent = u.factMinutes;
+  $('t-factQuestions').textContent = u.factQuestions;
+  $('t-factNeuro').textContent = u.factNeuro;
+  $('t-nameLabel').textContent = u.nameLabel;
+  $('nameInput').placeholder = u.namePlaceholder;
+  $('nameError').textContent = u.nameError;
+  $('startBtn').textContent = u.startBtn;
+  $('t-startHint').textContent = u.startHint;
+
+  $('backBtn').textContent = u.back;
+  $('yesBtn').textContent = u.yes;
+  $('noBtn').textContent = u.no;
+  $('t-keyHint').innerHTML = u.keyHint;
+
+  $('t-resultEyebrow').textContent = u.resultEyebrow;
+  $('t-chartTitle').textContent = u.chartTitle;
+  $('downloadBtn').textContent = u.download;
+  $('restartBtn').textContent = u.restart;
+
+  renderLangSwitch();
+
+  // Вопросы перестраиваем на новом языке (индексы совпадают — ответы целы)
+  state.order = buildOrder();
+  if (screens.quiz.classList.contains('active')) renderQuestion();
 }
 
 // ---------- Вступление ----------
@@ -83,11 +142,10 @@ document.addEventListener('keydown', (e) => {
 function renderQuestion() {
   const total = state.order.length;
   const i = state.index;
-  const q = state.order[i];
 
   $('qIndex').textContent = String(i + 1).padStart(2, '0');
-  $('questionText').textContent = q.text;
-  $('counter').textContent = `Вопрос ${i + 1} из ${total}`;
+  $('questionText').textContent = state.order[i].text;
+  $('counter').textContent = T().ui.counter(i + 1, total);
   $('progressBar').style.width = `${(i / total) * 100}%`;
   $('backBtn').disabled = i === 0;
 
@@ -122,7 +180,7 @@ function computeScores() {
     if (state.answers[i] === 1) counts[q.neuro]++;
   });
   const max = {};
-  NEURO_ORDER.forEach((k) => { max[k] = QUESTIONS[k].length; });
+  NEURO_ORDER.forEach((k) => { max[k] = T().questions[k].length; });
   return { counts, max };
 }
 
@@ -155,13 +213,15 @@ function finish() {
     acetylcholine: counts.acetylcholine,
     gaba: counts.gaba,
     serotonin: counts.serotonin,
-    dominant: NEURO[domKey].name,
-    lobe: NEURO[domKey].lobe
+    dominant: T().neuro[domKey].name,
+    lobe: T().neuro[domKey].lobe,
+    lang: lang
   });
 }
 
 function renderResult(counts, max, domKey, lowKey) {
-  const dom = NEURO[domKey];
+  const N = T().neuro;
+  const dom = N[domKey];
   $('dominantTitle').textContent = dom.title;
   $('dominantMeta').textContent = `${dom.name} · ${dom.lobe} · ${dom.func}`;
   $('dominantDesc').textContent = dom.description;
@@ -170,20 +230,20 @@ function renderResult(counts, max, domKey, lowKey) {
   const list = $('scoreList');
   list.innerHTML = '';
   NEURO_ORDER.forEach((k) => {
-    const n = NEURO[k];
+    const color = NEURO_COLOR[k];
     const fillW = max[k] ? Math.round((counts[k] / max[k]) * 100) : 0;
     const li = document.createElement('li');
     li.innerHTML =
-      `<span class="dot" style="background:${n.color}"></span>` +
-      `<span class="label">${n.name}</span>` +
-      `<span class="track"><span class="fill" style="width:${fillW}%;background:${n.color}"></span></span>` +
+      `<span class="dot" style="background:${color}"></span>` +
+      `<span class="label">${N[k].name}</span>` +
+      `<span class="track"><span class="fill" style="width:${fillW}%;background:${color}"></span></span>` +
       `<span class="pct">${counts[k]} / ${max[k]}</span>`;
     list.appendChild(li);
   });
 
-  const low = NEURO[lowKey];
+  const low = N[lowKey];
   $('lowNote').innerHTML =
-    `<b>Зона внимания — ${low.name} (${counts[lowKey]} из ${max[lowKey]}):</b> ${low.lowNote}`;
+    `<b>${T().ui.lowPrefix} — ${low.name} (${counts[lowKey]} / ${max[lowKey]}):</b> ${low.lowNote}`;
 }
 
 // ---------- График ----------
@@ -191,10 +251,11 @@ function renderChart(counts, max, domKey) {
   const ctx = $('chart').getContext('2d');
   if (chartInstance) chartInstance.destroy();
 
-  const labels = NEURO_ORDER.map((k) => NEURO[k].name);
+  const N = T().neuro;
+  const labels = NEURO_ORDER.map((k) => N[k].name);
   const data = NEURO_ORDER.map((k) => counts[k]);
   const yMax = Math.max(...NEURO_ORDER.map((k) => max[k]));
-  const pointColors = NEURO_ORDER.map((k) => NEURO[k].color);
+  const pointColors = NEURO_ORDER.map((k) => NEURO_COLOR[k]);
   const pointSizes = NEURO_ORDER.map((k) => (k === domKey ? 10 : 6));
 
   chartInstance = new Chart(ctx, {
@@ -219,7 +280,7 @@ function renderChart(counts, max, domKey) {
       maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (c) => `${c.parsed.y} из ${yMax} баллов` } }
+        tooltip: { callbacks: { label: (c) => T().ui.tooltip(c.parsed.y, yMax) } }
       },
       scales: {
         y: {
@@ -239,7 +300,7 @@ function renderChart(counts, max, domKey) {
 $('downloadBtn').addEventListener('click', () => {
   if (!chartInstance) return;
   const link = document.createElement('a');
-  link.download = `нейропрофиль-${state.name || 'результат'}.png`;
+  link.download = `${T().ui.fileName}-${state.name || 'result'}.png`;
   link.href = chartInstance.toBase64Image('image/png', 1);
   link.click();
 });
@@ -266,10 +327,10 @@ async function submitToSheet(payload) {
       mode: 'no-cors',
       body: JSON.stringify(payload)
     });
-    status.textContent = 'Результат сохранён ✓';
+    status.textContent = T().ui.saved;
   } catch (err) {
     console.error('Не удалось отправить результат:', err);
-    status.textContent = 'Результат показан, но не сохранён (нет сети).';
+    status.textContent = T().ui.notSaved;
   }
 }
 
@@ -301,4 +362,5 @@ function loadProgress() {
 }
 
 // ---------- Старт ----------
+applyLang();    // строит state.order и проставляет надписи
 loadProgress(); // если есть незавершённая сессия — продолжаем с того же места

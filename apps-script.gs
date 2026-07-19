@@ -25,7 +25,7 @@ function doPost(e) {
       sheet.appendRow([
         'Дата', 'ФИО',
         'Дофамин (из 50)', 'Ацетилхолин (из 50)', 'ГАМК (из 50)', 'Серотонин (из 50)',
-        'Доминирующий тип', 'Активная доля мозга'
+        'Доминирующий тип', 'Активная доля мозга', 'Язык'
       ]);
     }
 
@@ -33,7 +33,8 @@ function doPost(e) {
       new Date(),
       data.name || '',
       data.dopamine, data.acetylcholine, data.gaba, data.serotonin,
-      data.dominant || '', data.lobe || ''
+      data.dominant || '', data.lobe || '',
+      data.lang === 'kk' ? 'Қазақша' : 'Русский'
     ]);
 
     return ContentService

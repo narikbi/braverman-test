@@ -15,24 +15,24 @@
     <!-- ЭКРАН 1: ВСТУПЛЕНИЕ -->
     <section id="intro" class="screen active">
       <div class="card intro-card">
-        <div class="badge">Нейропрофиль</div>
-        <h1>Тест на биохимический<br />тип личности</h1>
-        <p class="lead">
-          Полный тест из 200 утверждений. Отвечайте «Да» или «Нет» — и узнайте
-          свой профиль по четырём нейромедиаторам и активную долю мозга.
-        </p>
+        <div class="intro-top">
+          <div class="badge" id="t-badge">Нейропрофиль</div>
+          <div class="lang-switch" id="langSwitch"></div>
+        </div>
+        <h1 id="t-h1">Тест на биохимический<br />тип личности</h1>
+        <p class="lead" id="t-lead"></p>
         <ul class="facts">
-          <li><span>≈20</span> минут</li>
-          <li><span>200</span> вопросов</li>
-          <li><span>4</span> нейромедиатора</li>
+          <li><span>≈20</span> <em id="t-factMinutes">минут</em></li>
+          <li><span>200</span> <em id="t-factQuestions">вопросов</em></li>
+          <li><span>4</span> <em id="t-factNeuro">нейромедиатора</em></li>
         </ul>
         <label class="field">
-          <span>Ваше ФИО</span>
-          <input id="nameInput" type="text" placeholder="Введите имя и фамилию" autocomplete="name" />
+          <span id="t-nameLabel">Ваше ФИО</span>
+          <input id="nameInput" type="text" autocomplete="name" />
         </label>
-        <p id="nameError" class="error" hidden>Пожалуйста, введите ваше ФИО</p>
+        <p id="nameError" class="error" hidden></p>
         <button id="startBtn" class="btn btn-primary btn-block">Начать тест</button>
-        <p class="hint subtle">Отвечайте искренне — здесь нет «правильных» ответов.</p>
+        <p class="hint subtle" id="t-startHint"></p>
       </div>
     </section>
 
@@ -43,8 +43,8 @@
           <div id="progressBar" class="progress-bar"></div>
         </div>
         <div class="progress-meta">
-          <button id="backBtn" class="btn-text" aria-label="Назад">← Назад</button>
-          <span id="counter">Вопрос 1 из 60</span>
+          <button id="backBtn" class="btn-text">← Назад</button>
+          <span id="counter"></span>
         </div>
       </div>
 
@@ -57,20 +57,20 @@
         <button id="noBtn" class="btn btn-answer btn-no">Нет</button>
         <button id="yesBtn" class="btn btn-answer btn-yes">Да</button>
       </div>
-      <p class="hint subtle">Подсказка: клавиша <b>1</b> — Да, <b>2</b> — Нет</p>
+      <p class="hint subtle" id="t-keyHint"></p>
     </section>
 
     <!-- ЭКРАН 3: РЕЗУЛЬТАТ -->
     <section id="result" class="screen">
       <div class="card result-card">
-        <p class="result-eyebrow">Ваш результат</p>
+        <p class="result-eyebrow" id="t-resultEyebrow">Ваш результат</p>
         <h2 id="dominantTitle" class="dominant-title">—</h2>
         <p id="dominantMeta" class="dominant-meta">—</p>
         <p id="dominantDesc" class="dominant-desc">—</p>
       </div>
 
       <div class="card chart-card">
-        <h3 class="chart-title">Профиль нейромедиаторов</h3>
+        <h3 class="chart-title" id="t-chartTitle">Профиль нейромедиаторов</h3>
         <div class="chart-wrap">
           <canvas id="chart"></canvas>
         </div>
@@ -88,6 +88,8 @@
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="content-ru.js"></script>
+  <script src="content-kk.js"></script>
   <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
