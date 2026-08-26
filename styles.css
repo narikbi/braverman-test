@@ -319,6 +319,29 @@ html, body {
 }
 .low-note b { color: var(--text); }
 
+.video-card { margin-bottom: 18px; }
+.video-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.video-head .chart-title { margin-bottom: 0; }
+.video-wrap {
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #000;
+}
+.video-wrap iframe {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+}
+
 .result-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -100,6 +100,13 @@ function applyLang() {
 
   renderLangSwitch();
 
+  // Если открыт результат с видео — обновляем его заголовок и кнопки
+  if (videoKey && !$('videoCard').hidden) {
+    $('videoTitle').textContent = T().ui.videoTitle;
+    const entry = (typeof VIDEOS !== 'undefined' && VIDEOS[videoKey]) || {};
+    renderVideoLangSwitch(entry, LANGS.map((l) => l.code).filter((c) => entry[c]));
+  }
+
   // Вопросы перестраиваем на новом языке (индексы совпадают — ответы целы)
   state.order = buildOrder();
   if (screens.quiz.classList.contains('active')) renderQuestion();
@@ -205,6 +212,7 @@ function finish() {
   renderResult(counts, max, domKey, lowKey);
   showScreen('result');
   renderChart(counts, max, domKey);
+  renderVideo(domKey, counts);
   clearProgress();
 
   submitToSheet({
@@ -297,6 +305,69 @@ function renderChart(counts, max, domKey) {
   });
 }
 
+// ---------- Видео-разбор результата ----------
+// Пары видео: доминанта + кто выше из противоположной группы.
+const VIDEO_GROUP_A = ['dopamine', 'acetylcholine']; // возбуждающие
+const VIDEO_GROUP_B = ['gaba', 'serotonin'];         // тормозящие
+
+let videoKey = null;   // текущая комбинация, напр. 'dopamine-gaba'
+let videoLang = null;  // язык проигрываемого видео
+
+function videoKeyFor(domKey, counts) {
+  const other = VIDEO_GROUP_A.includes(domKey) ? VIDEO_GROUP_B : VIDEO_GROUP_A;
+  const partner = other.reduce((best, k) => (counts[k] > counts[best] ? k : best), other[0]);
+  return `${domKey}-${partner}`;
+}
+
+function setVideoSrc(id) {
+  $('videoFrame').src = `https://www.youtube-nocookie.com/embed/${id}`;
+}
+
+function stopVideo() {
+  $('videoFrame').src = '';
+  $('videoCard').hidden = true;
+  videoKey = null;
+}
+
+function renderVideo(domKey, counts) {
+  const card = $('videoCard');
+  videoKey = videoKeyFor(domKey, counts);
+  const entry = (typeof VIDEOS !== 'undefined' && VIDEOS[videoKey]) || {};
+  const available = LANGS.map((l) => l.code).filter((c) => entry[c]);
+
+  if (!available.length) {           // видео ещё не загружены — блок скрыт
+    stopVideo();
+    return;
+  }
+
+  videoLang = entry[lang] ? lang : available[0]; // дефолт = язык интерфейса
+  card.hidden = false;
+  $('videoTitle').textContent = T().ui.videoTitle;
+  renderVideoLangSwitch(entry, available);
+  setVideoSrc(entry[videoLang]);
+}
+
+function renderVideoLangSwitch(entry, available) {
+  const box = $('videoLangSwitch');
+  box.innerHTML = '';
+  if (available.length < 2) { box.hidden = true; return; }
+  box.hidden = false;
+  LANGS.forEach((l) => {
+    if (!entry[l.code]) return;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'lang-btn' + (l.code === videoLang ? ' active' : '');
+    b.textContent = T().ui.videoLangs[l.code];
+    b.addEventListener('click', () => {
+      if (videoLang === l.code) return;
+      videoLang = l.code;
+      setVideoSrc(entry[l.code]);
+      renderVideoLangSwitch(entry, available);
+    });
+    box.appendChild(b);
+  });
+}
+
 $('downloadBtn').addEventListener('click', () => {
   if (!chartInstance) return;
   const link = document.createElement('a');
@@ -310,6 +381,7 @@ $('restartBtn').addEventListener('click', () => {
   state.answers = [];
   state.index = 0;
   $('nameInput').value = '';
+  stopVideo(); // останавливаем ролик, чтобы звук не играл после сброса
   clearProgress();
   showScreen('intro');
 });

@@ -78,6 +78,19 @@
         <p id="lowNote" class="low-note"></p>
       </div>
 
+      <div class="card video-card" id="videoCard" hidden>
+        <div class="video-head">
+          <h3 class="chart-title" id="videoTitle"></h3>
+          <div class="lang-switch" id="videoLangSwitch"></div>
+        </div>
+        <div class="video-wrap">
+          <iframe id="videoFrame" src="" title="Video"
+                  loading="lazy" frameborder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowfullscreen></iframe>
+        </div>
+      </div>
+
       <div class="result-actions">
         <button id="downloadBtn" class="btn btn-secondary">Скачать график</button>
         <button id="restartBtn" class="btn btn-primary">Пройти заново</button>
@@ -91,6 +104,7 @@
   <script src="content-ru.js"></script>
   <script src="content-kk.js"></script>
   <script src="data.js"></script>
+  <script src="videos.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
