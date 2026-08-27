@@ -84,10 +84,12 @@
           <div class="lang-switch" id="videoLangSwitch"></div>
         </div>
         <div class="video-wrap">
+          <video id="videoPlayer" controls playsinline preload="metadata"
+                 controlslist="nodownload" hidden></video>
           <iframe id="videoFrame" src="" title="Video"
                   loading="lazy" frameborder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowfullscreen></iframe>
+                  allowfullscreen hidden></iframe>
         </div>
       </div>
 

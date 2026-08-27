@@ -78,32 +78,55 @@ python3 -m http.server 8000
 пары** (дофамин/холин ↔ ГАМК/серотонин). Видео показывается на языке
 прохождения теста, рядом кнопка переключения на второй язык.
 
-### Как подключить видео
+### Режимы плеера
 
-1. Загрузите 16 роликов на **YouTube** с доступом **«Доступ по ссылке»**
-   (Unlisted) — они не появятся в поиске, но будут играть на сайте.
-2. Для каждого ролика скопируйте **ID** — часть ссылки после `watch?v=`
-   (например, из `https://www.youtube.com/watch?v=AbCdEf12345` → `AbCdEf12345`).
-3. Вставьте ID в `videos.js` согласно таблице:
+Сайт умеет показывать видео двумя способами (настройка в `videos.js`):
 
-| Файл из Telegram | Ключ в videos.js | Поле |
+- **Cloudflare R2 + собственный плеер** (основной): без брендинга YouTube,
+  бесплатно (2 ГБ помещаются в бесплатные 10 ГБ, трафик $0). Включается,
+  когда в `VIDEO_HOST.base` вписан публичный адрес хранилища
+  (`https://pub-xxxxxxxx.r2.dev`). Файлы в хранилище должны называться
+  `<ключ>-<язык>.mp4`, напр. `dopamine-gaba-kk.mp4` (см. таблицу ниже).
+- **YouTube** (запасной): используется, пока `base` пустой, и автоматически
+  подхватывается, если файл в R2 не загрузился.
+
+### Настройка Cloudflare R2 (один раз)
+
+1. Зарегистрируйтесь на [dash.cloudflare.com](https://dash.cloudflare.com) (бесплатно).
+2. Слева **R2 Object Storage** → **Create bucket**, имя напр. `braverman-videos`.
+3. В бакете: **Settings → Public access → R2.dev subdomain → Allow** —
+   получите адрес вида `https://pub-xxxxxxxx.r2.dev`.
+4. Переименуйте 16 файлов по таблице ниже (`<ключ>-kk.mp4` / `<ключ>-ru.mp4`)
+   и перетащите их в бакет (вкладка **Objects → Upload**).
+5. Вставьте адрес `https://pub-xxxxxxxx.r2.dev` в `videos.js` → `VIDEO_HOST.base`.
+
+### YouTube (запасной режим)
+
+1. Ролики загружены как **«Доступ по ссылке»** (Unlisted).
+2. ID — часть ссылки после `watch?v=` — вписаны в `videos.js` согласно таблице:
+
+| Файл из Telegram | Имя файла в R2 | Ключ в videos.js |
 |---|---|---|
-| 01-қазақша-Дофамин-ГАМК | `dopamine-gaba` | `kk` |
-| 02-орысша-Дофамин-ГАМК | `dopamine-gaba` | `ru` |
-| 03-қазақша-Дофамин-Серотонин | `dopamine-serotonin` | `kk` |
-| 04-орысша-Дофамин-Серотонин | `dopamine-serotonin` | `ru` |
-| 05-қазақша-Холин-ГАМК | `acetylcholine-gaba` | `kk` |
-| 06-орысша-Холин-ГАМК | `acetylcholine-gaba` | `ru` |
-| 07-қазақша-Холин-Серотонин | `acetylcholine-serotonin` | `kk` |
-| 08-орысша-Холин-Серотонин | `acetylcholine-serotonin` | `ru` |
-| 09-қазақша-ГАМК-Дофамин | `gaba-dopamine` | `kk` |
-| 10-орысша-ГАМК-Дофамин | `gaba-dopamine` | `ru` |
-| 11-қазақша-ГАМК-Холин | `gaba-acetylcholine` | `kk` |
-| 12-орысша-ГАМК-Холин | `gaba-acetylcholine` | `ru` |
-| 13-қазақша-Серотонин-Дофамин | `serotonin-dopamine` | `kk` |
-| 14-орысша-Серотонин-Дофамин | `serotonin-dopamine` | `ru` |
-| 15-қазақша-Серотонин-Холин | `serotonin-acetylcholine` | `kk` |
-| 16-орысша-Серотонин-Холин | `serotonin-acetylcholine` | `ru` |
+| 01-қазақша-Дофамин-ГАМК | `dopamine-gaba-kk.mp4` | `dopamine-gaba` / kk |
+| 02-орысша-Дофамин-ГАМК | `dopamine-gaba-ru.mp4` | `dopamine-gaba` / ru |
+| 03-қазақша-Дофамин-Серотонин | `dopamine-serotonin-kk.mp4` | `dopamine-serotonin` / kk |
+| 04-орысша-Дофамин-Серотонин | `dopamine-serotonin-ru.mp4` | `dopamine-serotonin` / ru |
+| 05-қазақша-Холин-ГАМК | `acetylcholine-gaba-kk.mp4` | `acetylcholine-gaba` / kk |
+| 06-орысша-Холин-ГАМК | `acetylcholine-gaba-ru.mp4` | `acetylcholine-gaba` / ru |
+| 07-қазақша-Холин-Серотонин | `acetylcholine-serotonin-kk.mp4` | `acetylcholine-serotonin` / kk |
+| 08-орысша-Холин-Серотонин | `acetylcholine-serotonin-ru.mp4` | `acetylcholine-serotonin` / ru |
+| 09-қазақша-ГАМК-Дофамин | `gaba-dopamine-kk.mp4` | `gaba-dopamine` / kk |
+| 10-орысша-ГАМК-Дофамин | `gaba-dopamine-ru.mp4` | `gaba-dopamine` / ru |
+| 11-қазақша-ГАМК-Холин | `gaba-acetylcholine-kk.mp4` | `gaba-acetylcholine` / kk |
+| 12-орысша-ГАМК-Холин | `gaba-acetylcholine-ru.mp4` | `gaba-acetylcholine` / ru |
+| 13-қазақша-Серотонин-Дофамин | `serotonin-dopamine-kk.mp4` | `serotonin-dopamine` / kk |
+| 14-орысша-Серотонин-Дофамин | `serotonin-dopamine-ru.mp4` | `serotonin-dopamine` / ru |
+| 15-қазақша-Серотонин-Холин | `serotonin-acetylcholine-kk.mp4` | `serotonin-acetylcholine` / kk |
+| 16-орысша-Серотонин-Холин | `serotonin-acetylcholine-ru.mp4` | `serotonin-acetylcholine` / ru |
+
+Переименовать все файлы разом можно скриптом `rename-videos.sh`: положите
+16 скачанных файлов в одну папку и запустите `bash rename-videos.sh` в ней
+(скрипт находит файлы по номеру в начале имени).
 
 Пока ID не вставлен, блок видео на сайте просто не показывается — тест
 работает как обычно. Можно заполнять постепенно: если есть только один язык,

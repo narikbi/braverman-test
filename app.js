@@ -319,13 +319,45 @@ function videoKeyFor(domKey, counts) {
   return `${domKey}-${partner}`;
 }
 
-function setVideoSrc(id) {
-  // rel=0 — в конце/на паузе только видео этого же канала; playsinline — не разворачивать на весь экран на iPhone
-  $('videoFrame').src = `https://www.youtube-nocookie.com/embed/${id}?rel=0&playsinline=1`;
+// Режим R2 (свой плеер) включается, когда указан VIDEO_HOST.base.
+function r2Url(langCode) {
+  return `${VIDEO_HOST.base}/${videoKey}-${langCode}.mp4`;
+}
+
+function setVideoSrc(youtubeId, langCode) {
+  const player = $('videoPlayer');
+  const frame = $('videoFrame');
+
+  if (VIDEO_HOST.base) {
+    // Свой плеер без брендинга; если файл не загрузится — упадём на YouTube
+    frame.hidden = true;
+    frame.src = '';
+    player.hidden = false;
+    player.onerror = () => {
+      player.hidden = true;
+      player.removeAttribute('src');
+      if (youtubeId) {
+        frame.hidden = false;
+        frame.src = `https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0&playsinline=1`;
+      }
+    };
+    player.src = r2Url(langCode);
+  } else {
+    // rel=0 — в конце/на паузе только видео этого же канала
+    player.hidden = true;
+    player.removeAttribute('src');
+    frame.hidden = false;
+    frame.src = `https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0&playsinline=1`;
+  }
 }
 
 function stopVideo() {
+  const player = $('videoPlayer');
+  player.pause();
+  player.removeAttribute('src');
+  player.hidden = true;
   $('videoFrame').src = '';
+  $('videoFrame').hidden = true;
   $('videoCard').hidden = true;
   videoKey = null;
 }
@@ -345,7 +377,7 @@ function renderVideo(domKey, counts) {
   card.hidden = false;
   $('videoTitle').textContent = T().ui.videoTitle;
   renderVideoLangSwitch(entry, available);
-  setVideoSrc(entry[videoLang]);
+  setVideoSrc(entry[videoLang], videoLang);
 }
 
 function renderVideoLangSwitch(entry, available) {
@@ -362,7 +394,7 @@ function renderVideoLangSwitch(entry, available) {
     b.addEventListener('click', () => {
       if (videoLang === l.code) return;
       videoLang = l.code;
-      setVideoSrc(entry[l.code]);
+      setVideoSrc(entry[l.code], l.code);
       renderVideoLangSwitch(entry, available);
     });
     box.appendChild(b);

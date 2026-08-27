@@ -335,12 +335,16 @@ html, body {
   overflow: hidden;
   background: #000;
 }
-.video-wrap iframe {
+.video-wrap iframe,
+.video-wrap video {
   width: 100%;
   height: 100%;
   display: block;
   border: 0;
+  background: #000;
 }
+.video-wrap video[hidden],
+.video-wrap iframe[hidden] { display: none; }
 
 .result-actions {
   display: grid;
