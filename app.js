@@ -320,7 +320,8 @@ function videoKeyFor(domKey, counts) {
 }
 
 function setVideoSrc(id) {
-  $('videoFrame').src = `https://www.youtube-nocookie.com/embed/${id}`;
+  // rel=0 — в конце/на паузе только видео этого же канала; playsinline — не разворачивать на весь экран на iPhone
+  $('videoFrame').src = `https://www.youtube-nocookie.com/embed/${id}?rel=0&playsinline=1`;
 }
 
 function stopVideo() {
