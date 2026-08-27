@@ -1,18 +1,15 @@
-// Видео-разборы результатов: 8 комбинаций × 2 языка.
-// Сюда вставляются YouTube ID (часть ссылки после watch?v=).
-// Пример: https://www.youtube.com/watch?v=AbCdEf12345 → 'AbCdEf12345'
-//
-// Пустая строка '' = видео ещё не загружено (блок на сайте будет скрыт).
-// Номера в комментариях — исходные файлы из Telegram.
+// Видео-разборы результатов: 8 комбинаций × 2 языка (YouTube, доступ по ссылке).
+// ID — часть ссылки после watch?v=. Плейлист: «Braverman».
+// Пустая строка '' = видео не загружено (блок на сайте будет скрыт).
 
 const VIDEOS = {
-  //                                қазақша        орысша
-  'dopamine-gaba':            { kk: '', ru: '' }, // 01-қазақша-Дофамин-ГАМК       / 02-орысша-Дофамин-ГАМК
-  'dopamine-serotonin':       { kk: '', ru: '' }, // 03-қазақша-Дофамин-Серотонин  / 04-орысша-Дофамин-Серотонин
-  'acetylcholine-gaba':       { kk: '', ru: '' }, // 05-қазақша-Холин-ГАМК         / 06-орысша-Холин-ГАМК
-  'acetylcholine-serotonin':  { kk: '', ru: '' }, // 07-қазақша-Холин-Серотонин    / 08-орысша-Холин-Серотонин
-  'gaba-dopamine':            { kk: '', ru: '' }, // 09-қазақша-ГАМК-Дофамин       / 10-орысша-ГАМК-Дофамин
-  'gaba-acetylcholine':       { kk: '', ru: '' }, // 11-қазақша-ГАМК-Холин         / 12-орысша-ГАМК-Холин
-  'serotonin-dopamine':       { kk: '', ru: '' }, // 13-қазақша-Серотонин-Дофамин  / 14-орысша-Серотонин-Дофамин
-  'serotonin-acetylcholine':  { kk: '', ru: '' }, // 15-қазақша-Серотонин-Холин    / 16-орысша-Серотонин-Холин
+  //                                қазақша              орысша
+  'dopamine-gaba':            { kk: 'HeVNed6JpAQ', ru: 'HdiWrCP3ZJY' }, // 01 / 02 Дофамин-ГАМК
+  'dopamine-serotonin':       { kk: '-W7hPYI_qXo', ru: 'PQOPnX9xssU' }, // 03 / 04 Дофамин-Серотонин
+  'acetylcholine-gaba':       { kk: '6dS4r3QpVSo', ru: 'LfY6_qn8Ej4' }, // 05 / 06 Холин-ГАМК
+  'acetylcholine-serotonin':  { kk: 'I7gCAleBA1M', ru: 'kJkEs9lIGZQ' }, // 07 / 08 Холин-Серотонин
+  'gaba-dopamine':            { kk: 'WPLr0clqwWg', ru: '9jR4a6plXb8' }, // 09 / 10 ГАМК-Дофамин
+  'gaba-acetylcholine':       { kk: '-CZSMMq0qBo', ru: '-ISffjMr_l0' }, // 11 / 12 ГАМК-Холин
+  'serotonin-dopamine':       { kk: 'voj5RPHNZNE', ru: 'wJnmcY2ORP0' }, // 13 / 14 Серотонин-Дофамин
+  'serotonin-acetylcholine':  { kk: 'WpBzYcV70wI', ru: 'hlTg5gR0dCk' }, // 15 / 16 Серотонин-Холин
 };
