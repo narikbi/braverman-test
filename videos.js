@@ -10,7 +10,7 @@
 //    а также автоматически, если файл в R2 не загрузился.
 
 const VIDEO_HOST = {
-  base: ''   // ← сюда вставить адрес R2, например 'https://pub-xxxxxxxx.r2.dev'
+  base: 'https://pub-5a014c13711042d6b1b4e8d96d558550.r2.dev'
 };
 
 const VIDEOS = {
