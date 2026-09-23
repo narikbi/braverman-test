@@ -9,7 +9,7 @@ function initial(): Lang {
     const v = localStorage.getItem(LANG_KEY)
     if (v === 'kk' || v === 'ru') return v
   } catch { /* noop */ }
-  return 'ru'
+  return 'kk' // по умолчанию казахский; выбор пользователя запоминается в localStorage
 }
 
 export let lang: Lang = initial()
