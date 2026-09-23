@@ -1,112 +1,22 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="kk">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Тест на биохимический тип личности</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
+  <title>Тест переехал на braverman.kz</title>
+  <link rel="canonical" href="https://braverman.kz/" />
+  <meta name="robots" content="noindex" />
+  <meta http-equiv="refresh" content="0; url=https://braverman.kz/" />
+  <script>
+    // Сайт переехал: сохраняем ?t=<код тренера>, utm-метки и прочие параметры.
+    location.replace('https://braverman.kz/' + location.search + location.hash)
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; background: #f6f7fb; color: #1f2430; }
+    a { color: #4f46e5; font-weight: 600; }
+  </style>
 </head>
 <body>
-  <main class="app">
-
-    <!-- ЭКРАН 1: ВСТУПЛЕНИЕ -->
-    <section id="intro" class="screen active">
-      <div class="card intro-card">
-        <div class="intro-top">
-          <div class="badge" id="t-badge">Нейропрофиль</div>
-          <div class="lang-switch" id="langSwitch"></div>
-        </div>
-        <h1 id="t-h1">Тест на биохимический<br />тип личности</h1>
-        <p class="lead" id="t-lead"></p>
-        <ul class="facts">
-          <li><span>≈20</span> <em id="t-factMinutes">минут</em></li>
-          <li><span>200</span> <em id="t-factQuestions">вопросов</em></li>
-          <li><span>4</span> <em id="t-factNeuro">нейромедиатора</em></li>
-        </ul>
-        <label class="field">
-          <span id="t-nameLabel">Ваше ФИО</span>
-          <input id="nameInput" type="text" autocomplete="name" />
-        </label>
-        <p id="nameError" class="error" hidden></p>
-        <button id="startBtn" class="btn btn-primary btn-block">Начать тест</button>
-        <p class="hint subtle" id="t-startHint"></p>
-      </div>
-    </section>
-
-    <!-- ЭКРАН 2: ВОПРОСЫ -->
-    <section id="quiz" class="screen">
-      <div class="quiz-top">
-        <div class="progress">
-          <div id="progressBar" class="progress-bar"></div>
-        </div>
-        <div class="progress-meta">
-          <button id="backBtn" class="btn-text">← Назад</button>
-          <span id="counter"></span>
-        </div>
-      </div>
-
-      <div class="card quiz-card" id="quizCard">
-        <p class="q-index" id="qIndex">01</p>
-        <h2 class="question" id="questionText">—</h2>
-      </div>
-
-      <div class="answers">
-        <button id="noBtn" class="btn btn-answer btn-no">Нет</button>
-        <button id="yesBtn" class="btn btn-answer btn-yes">Да</button>
-      </div>
-      <p class="hint subtle" id="t-keyHint"></p>
-    </section>
-
-    <!-- ЭКРАН 3: РЕЗУЛЬТАТ -->
-    <section id="result" class="screen">
-      <div class="card result-card">
-        <p class="result-eyebrow" id="t-resultEyebrow">Ваш результат</p>
-        <h2 id="dominantTitle" class="dominant-title">—</h2>
-        <p id="dominantMeta" class="dominant-meta">—</p>
-        <p id="dominantDesc" class="dominant-desc">—</p>
-      </div>
-
-      <div class="card chart-card">
-        <h3 class="chart-title" id="t-chartTitle">Профиль нейромедиаторов</h3>
-        <div class="chart-wrap">
-          <canvas id="chart"></canvas>
-        </div>
-        <ul id="scoreList" class="score-list"></ul>
-        <p id="lowNote" class="low-note"></p>
-      </div>
-
-      <div class="card video-card" id="videoCard" hidden>
-        <div class="video-head">
-          <h3 class="chart-title" id="videoTitle"></h3>
-          <div class="lang-switch" id="videoLangSwitch"></div>
-        </div>
-        <div class="video-wrap">
-          <video id="videoPlayer" controls playsinline preload="metadata"
-                 controlslist="nodownload" hidden></video>
-          <iframe id="videoFrame" src="" title="Video"
-                  loading="lazy" frameborder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowfullscreen hidden></iframe>
-        </div>
-      </div>
-
-      <div class="result-actions">
-        <button id="downloadBtn" class="btn btn-secondary">Скачать график</button>
-        <button id="restartBtn" class="btn btn-primary">Пройти заново</button>
-      </div>
-      <p id="saveStatus" class="hint subtle"></p>
-    </section>
-
-  </main>
-
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="content-ru.js"></script>
-  <script src="content-kk.js"></script>
-  <script src="data.js"></script>
-  <script src="videos.js"></script>
-  <script src="app.js"></script>
+  <p>Тест жаңа мекенжайда · Тест переехал: <a href="https://braverman.kz/">braverman.kz</a></p>
 </body>
 </html>
