@@ -14,6 +14,7 @@ export type UiText = {
   lead: string
   authorRole: string
   authorVideoRole: string
+  disclaimer: string
   factMinutes: string
   factQuestions: string
   factNeuro: string

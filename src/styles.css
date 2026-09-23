@@ -460,3 +460,13 @@ html, body {
 /* ссылка, оформленная как кнопка (WhatsApp на странице результата) */
 a.btn { display: inline-block; text-align: center; text-decoration: none; }
 a.btn-block { display: block; }
+/* дисклеймер на главной — мелко и неброско */
+.disclaimer {
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #9CA3AF;
+  text-align: center;
+}
