@@ -112,8 +112,21 @@ html, body {
 .lead {
   color: var(--muted);
   font-size: 16px;
-  margin-bottom: 26px;
+  margin-bottom: 20px;
 }
+.author-row { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.author-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 3px solid #fff;
+  box-shadow: 0 4px 14px rgba(26, 26, 46, 0.14);
+}
+.author-name { font-size: 15px; font-weight: 700; color: var(--text); }
+.author-handle { font-weight: 500; color: var(--muted); }
+.author-role { font-size: 13px; color: var(--muted); }
 
 .facts {
   display: flex;

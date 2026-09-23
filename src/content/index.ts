@@ -12,6 +12,7 @@ export type UiText = {
   badge: string
   h1: string
   lead: string
+  authorRole: string
   factMinutes: string
   factQuestions: string
   factNeuro: string

@@ -35,6 +35,7 @@ export function applyStatic() {
   $('t-badge').textContent = u.badge
   $('t-h1').innerHTML = u.h1
   $('t-lead').textContent = u.lead
+  $('t-authorRole').textContent = u.authorRole
   $('t-factMinutes').textContent = u.factMinutes
   $('t-factQuestions').textContent = u.factQuestions
   $('t-factNeuro').textContent = u.factNeuro
