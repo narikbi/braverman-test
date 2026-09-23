@@ -15,7 +15,7 @@ export const KK: Content = {
     factQuestions: 'сұрақ',
     factNeuro: 'нейромедиатор',
     nameLabel: 'Аты-жөніңіз',
-    namePlaceholder: 'Атыңыз бен тегіңізді жазыңыз',
+    namePlaceholder: 'Мысалы:', // + пример имени из EXAMPLE_NAMES (меняется по кругу)
     nameError: 'Аты-жөніңізді жазыңыз',
     startBtn: 'Тестті бастау',
     startHint: 'Шынын айтыңыз — мұнда «дұрыс» жауап деген жоқ.',

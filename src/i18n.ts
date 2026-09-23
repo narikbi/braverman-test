@@ -1,5 +1,5 @@
 // Язык интерфейса: ru | kk. Тексты — в content/. Смена языка не трогает ответы (индексы совпадают).
-import { CONTENT, LANGS, type Lang, type Content } from './content'
+import { CONTENT, LANGS, EXAMPLE_NAMES, type Lang, type Content } from './content'
 import { $ } from './dom'
 
 const LANG_KEY = 'braverman_lang'
@@ -40,7 +40,7 @@ export function applyStatic() {
   $('t-factQuestions').textContent = u.factQuestions
   $('t-factNeuro').textContent = u.factNeuro
   $('t-nameLabel').textContent = u.nameLabel
-  $<HTMLInputElement>('nameInput').placeholder = u.namePlaceholder
+  setNamePlaceholder()
   $('nameError').textContent = u.nameError
   $('startBtn').textContent = u.startBtn
   $('t-startHint').textContent = u.startHint
@@ -61,6 +61,16 @@ export function applyStatic() {
   $('shareWaBtn').textContent = u.resultLink.shareWa
 
   renderLangSwitch()
+}
+
+// Подсказка в поле имени: «Мысалы: <известное имя>», имя меняется по кругу (см. intro.ts)
+let exampleIdx = 0
+function setNamePlaceholder() {
+  $<HTMLInputElement>('nameInput').placeholder = `${T().ui.namePlaceholder} ${EXAMPLE_NAMES[exampleIdx]}`
+}
+export function nextNameExample() {
+  exampleIdx = (exampleIdx + 1) % EXAMPLE_NAMES.length
+  setNamePlaceholder()
 }
 
 function renderLangSwitch() {

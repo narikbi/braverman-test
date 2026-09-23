@@ -126,6 +126,7 @@ html, body {
 }
 .author-name { font-size: 15px; font-weight: 700; color: var(--text); }
 .author-handle { font-weight: 500; color: var(--muted); }
+.author-name .verified { width: 17px; height: 17px; margin-left: 4px; vertical-align: -3px; }
 .author-role { font-size: 13px; color: var(--muted); }
 
 .facts {

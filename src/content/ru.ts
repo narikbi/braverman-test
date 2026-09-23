@@ -13,7 +13,7 @@ export const RU: Content = {
     factQuestions: 'вопросов',
     factNeuro: 'нейромедиатора',
     nameLabel: 'Ваше ФИО',
-    namePlaceholder: 'Введите имя и фамилию',
+    namePlaceholder: 'Например:', // + пример имени из EXAMPLE_NAMES (меняется по кругу)
     nameError: 'Пожалуйста, введите ваше ФИО',
     startBtn: 'Начать тест',
     startHint: 'Отвечайте искренне — здесь нет «правильных» ответов.',
