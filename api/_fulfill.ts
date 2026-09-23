@@ -3,7 +3,7 @@
 // Идемпотентно: markPaid отмечает счёт оплаченным ровно один раз; неизвестный счёт игнорируется.
 import { markPaid, logEvent, setPaymentLinkSent, getAttempt, q } from './_db.js'
 import { makeResultToken } from './_access.js'
-import { sendWhatsApp, whatsappConfigured } from './_whatsapp.js'
+import { sendWhatsApp, whatsappConfigured, fmtWaNumber } from './_whatsapp.js'
 import { resultLinkMessage } from './_wa-text.js'
 import { tgNotify, adminAttemptLink, SITE, sheetMirror } from './_lib.js'
 
@@ -13,6 +13,12 @@ export function resultLink(attemptId: number): string {
 
 const RU_NAME: Record<string, string> = { dopamine: 'Дофамин', acetylcholine: 'Ацетилхолин', gaba: 'ГАМК', serotonin: 'Серотонин' }
 const RU_LOBE: Record<string, string> = { dopamine: 'Лобная доля', acetylcholine: 'Теменная доля', gaba: 'Височная доля', serotonin: 'Затылочная доля' }
+
+/** «ГАМК + Ацетилхолин» — доминанта и пара из видео-разбора (combo = '<доминанта>-<пара>') */
+function comboLabel(dominant: string, combo: string | null | undefined): string {
+  const partner = combo ? combo.split('-')[1] : ''
+  return [dominant, partner].filter(Boolean).map(k => RU_NAME[k] || k).join(' + ')
+}
 
 export async function fulfillPaidInvoice(i: {
   invoiceId: string
@@ -40,9 +46,11 @@ export async function fulfillPaidInvoice(i: {
 
   // Ссылка клиенту в WhatsApp — остаётся в чате навсегда
   let waSent = false
+  let waFrom = '' // номер пула wa-gateway, с которого ушло сообщение (номера чередуются)
   if (phone && whatsappConfigured()) {
     const w = await sendWhatsApp(phone, resultLinkMessage(attempt.name, link, attempt.lang))
     waSent = w.sent
+    waFrom = w.from || ''
     await setPaymentLinkSent(i.invoiceId, waSent)
   }
 
@@ -56,12 +64,16 @@ export async function fulfillPaidInvoice(i: {
     `👤 ${attempt.name || '—'}`,
     `📱 <code>${phone || '—'}</code>`,
     amount ? `💵 ${amount} ₸` : '',
-    full?.dominant ? `🧠 ${RU_NAME[full.dominant] || full.dominant} · ${full.combo || ''}` : '',
+    full?.dominant ? `🧠 ${comboLabel(full.dominant, full.combo)}` : '',
     trainer ? `🎓 Тренер: ${trainer.name} (${trainer.code})` : attempt.trainer_code ? `🎓 Код тренера: ${attempt.trainer_code} (неизвестен)` : '',
     `🧾 Счёт #${i.invoiceId} · ${i.source}`,
     `🔗 ${link}`,
     adminAttemptLink(attempt.id),
-    whatsappConfigured() ? (waSent ? '📲 Ссылка отправлена клиенту в WhatsApp ✅' : '📲 ❗️WhatsApp не доставлен — перешли ссылку клиенту') : ''
+    whatsappConfigured()
+      ? (waSent
+        ? `📲 Ссылка отправлена клиенту в WhatsApp ✅${waFrom ? `\n📤 С номера: <code>${fmtWaNumber(waFrom)}</code>` : ''}`
+        : '📲 ❗️WhatsApp не доставлен — перешли ссылку клиенту')
+      : ''
   ])
 
   // Необязательное зеркало в Google-таблицу (формат старого Apps Script)
