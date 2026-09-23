@@ -63,13 +63,13 @@ export function applyStatic() {
   renderLangSwitch()
 }
 
-// Подсказка в поле имени: «Мысалы: <известное имя>», имя меняется по кругу (см. intro.ts)
-let exampleIdx = 0
+// Подсказка в поле имени: «Мысалы: <известное имя>». Имя «печатается» по буквам — анимация в intro.ts
+let exampleText = EXAMPLE_NAMES[0]
 function setNamePlaceholder() {
-  $<HTMLInputElement>('nameInput').placeholder = `${T().ui.namePlaceholder} ${EXAMPLE_NAMES[exampleIdx]}`
+  $<HTMLInputElement>('nameInput').placeholder = `${T().ui.namePlaceholder} ${exampleText}`
 }
-export function nextNameExample() {
-  exampleIdx = (exampleIdx + 1) % EXAMPLE_NAMES.length
+export function setNameExample(text: string) {
+  exampleText = text
   setNamePlaceholder()
 }
 
