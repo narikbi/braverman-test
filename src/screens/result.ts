@@ -5,7 +5,7 @@ import { T, lang, onLangChange } from '../i18n'
 import { getResult, ApiError, type ResultPayload } from '../api'
 import { renderProfileChart, chartImage } from '../chart'
 import { renderVideo, relabelVideo, stopVideo } from '../video'
-import { NEURO_ORDER, NEURO_COLOR } from '../../shared/scoring'
+import { NEURO_ORDER, NEURO_COLOR, type NeuroKey } from '../../shared/scoring'
 import { showIntro } from './intro'
 import { renderCheckout } from './checkout'
 
@@ -74,8 +74,14 @@ export async function openResult(r: string) {
 function render(d: ResultPayload) {
   const N = T().neuro
   const dom = N[d.dominant]
+  // Две доминанты — та же пара, что и в видео-разборе: доминанта + сильнейший из противоположной пары
+  const partner = String(d.combo || '').split('-')[1] as NeuroKey | undefined
+  const pair: NeuroKey[] = partner && partner !== d.dominant && N[partner] ? [d.dominant, partner] : [d.dominant]
+  $('comboLine').innerHTML = pair
+    .map(k => `<span class="combo-chip" style="background:${NEURO_COLOR[k]}1f"><span class="combo-dot" style="background:${NEURO_COLOR[k]}"></span>${esc(N[k].name)}</span>`)
+    .join('<span class="combo-plus">+</span>')
   $('dominantTitle').textContent = dom.title
-  $('dominantMeta').textContent = `${dom.name} · ${dom.lobe} · ${dom.func}`
+  $('dominantMeta').textContent = `${dom.lobe} · ${dom.func}`
   $('dominantDesc').textContent = dom.description
 
   const list = $('scoreList')

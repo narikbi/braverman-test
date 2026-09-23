@@ -285,6 +285,26 @@ html, body {
   margin-bottom: 8px;
 }
 .dominant-meta { color: var(--accent); font-weight: 600; margin-bottom: 16px; }
+.combo-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.combo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.combo-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.combo-plus { color: var(--muted); font-size: 18px; font-weight: 700; }
 .dominant-desc { color: var(--muted); font-size: 15.5px; text-align: left; }
 
 .chart-card { margin-bottom: 18px; }
