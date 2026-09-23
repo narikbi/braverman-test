@@ -13,6 +13,7 @@ export type UiText = {
   h1: string
   lead: string
   authorRole: string
+  authorVideoRole: string
   factMinutes: string
   factQuestions: string
   factNeuro: string

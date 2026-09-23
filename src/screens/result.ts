@@ -7,6 +7,7 @@ import { renderProfileChart, chartImage } from '../chart'
 import { renderVideo, relabelVideo, stopVideo } from '../video'
 import { NEURO_ORDER, NEURO_COLOR, type NeuroKey } from '../../shared/scoring'
 import { showIntro } from './intro'
+import { authorRow } from '../author'
 import { renderCheckout } from './checkout'
 
 let last: ResultPayload | null = null
@@ -80,6 +81,7 @@ function render(d: ResultPayload) {
   $('comboLine').innerHTML = pair
     .map(k => `<span class="combo-chip" style="background:${NEURO_COLOR[k]}1f"><span class="combo-dot" style="background:${NEURO_COLOR[k]}"></span>${esc(N[k].name)}</span>`)
     .join('<span class="combo-plus">+</span>')
+  $('videoAuthor').innerHTML = authorRow('author-mic.webp', T().ui.authorVideoRole)
   $('dominantTitle').textContent = dom.title
   $('dominantMeta').textContent = `${dom.lobe} · ${dom.func}`
   $('dominantDesc').textContent = dom.description

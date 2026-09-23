@@ -456,3 +456,7 @@ html, body {
 }
 .link-box code { flex: 1; font-size: 13px; word-break: break-all; color: var(--text); }
 #resultError { color: #E5484D; text-align: center; padding: 28px; }
+#videoAuthor .author-row { margin-bottom: 16px; }
+/* ссылка, оформленная как кнопка (WhatsApp на странице результата) */
+a.btn { display: inline-block; text-align: center; text-decoration: none; }
+a.btn-block { display: block; }

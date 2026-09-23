@@ -7,6 +7,7 @@ import { checkout, ApiError } from '../api'
 import { renderProfileChart } from '../chart'
 import { NEURO_ORDER, QUESTIONS_PER_BLOCK, scoreAttempt } from '../../shared/scoring'
 import { renderWaiting } from './waiting'
+import { authorRow } from '../author'
 import { openResult } from './result'
 
 export const PRICE_KZT = Number(import.meta.env.VITE_PRICE_KZT || 5000)
@@ -40,6 +41,7 @@ export function renderCheckout(opts: { loading?: boolean; keepPhone?: boolean } 
       </div>
 
       <ul class="benefits">${u.benefits.map(b => `<li>${esc(b)}</li>`).join('')}</ul>
+      ${authorRow('author-laugh.webp', T().ui.authorVideoRole)}
 
       <label class="field">
         <span>${esc(u.phoneLabel)}</span>
