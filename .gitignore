@@ -1,3 +1,9 @@
+node_modules/
+dist/
+.env
+.env.local
+.env*
+!.env.example
+.vercel
 .DS_Store
 .claude/
-server.py

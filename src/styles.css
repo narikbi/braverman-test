@@ -365,3 +365,60 @@ html, body {
   .result-actions { grid-template-columns: 1fr; }
   .score-list .track { width: 80px; }
 }
+
+/* ---------- Новые экраны: оплата / ожидание / ссылка / восстановление ---------- */
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.centered { text-align: center; padding: 48px 32px; }
+.btn-sm { padding: 10px 14px; font-size: 14px; }
+.btn:disabled { opacity: 0.6; cursor: default; transform: none; }
+
+.recover-link {
+  display: block; text-align: center; margin-top: 14px;
+  font-size: 13.5px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px;
+}
+.recover-link:hover { color: var(--accent); }
+
+.checkout-card .lead { margin-bottom: 18px; }
+.teaser {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 18px 18px 14px; margin-bottom: 20px;
+}
+.teaser-label { font-size: 12.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.teaser-type { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; margin-top: 4px; }
+.teaser-meta { color: var(--accent); font-weight: 600; font-size: 14.5px; margin-top: 2px; }
+.teaser-chart { position: relative; margin-top: 14px; }
+.teaser-chart .chart-wrap { height: 180px; }
+.chart-wrap.blurred { filter: blur(6px); pointer-events: none; user-select: none; opacity: .85; }
+.teaser-chart .lock {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 40px; filter: drop-shadow(0 4px 12px rgba(26,26,46,.18));
+}
+.benefits { list-style: none; margin: 0 0 22px; display: grid; gap: 8px; }
+.benefits li { padding-left: 26px; position: relative; font-size: 15px; }
+.benefits li::before { content: '✓'; position: absolute; left: 0; color: var(--yes); font-weight: 700; }
+
+.waiting-card, .recover-card { text-align: center; }
+.waiting-card .lead, .recover-card .lead { margin-bottom: 20px; }
+.big-icon { font-size: 44px; margin-bottom: 8px; }
+.steps { text-align: left; margin: 0 0 20px; padding-left: 0; list-style: none; counter-reset: s; display: grid; gap: 10px; }
+.steps li { counter-increment: s; display: flex; gap: 12px; align-items: center; font-size: 15px; }
+.steps li::before {
+  content: counter(s); flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 13px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pay-waiting { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+.pay-spinner {
+  width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--border);
+  border-top-color: var(--accent); animation: spin .8s linear infinite; display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.recover-card .field { text-align: left; }
+
+.link-card { margin-bottom: 18px; }
+.link-box {
+  display: flex; align-items: center; gap: 10px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 12px;
+}
+.link-box code { flex: 1; font-size: 13px; word-break: break-all; color: var(--text); }
+#resultError { color: #E5484D; text-align: center; padding: 28px; }

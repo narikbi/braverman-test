@@ -2,12 +2,18 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Тест на биохимический тип личности</title>
+  <meta name="description" content="Тест Бравермана: 200 вопросов, профиль по 4 нейромедиаторам, активная доля мозга и видео-разбор вашей комбинации." />
+  <link rel="canonical" href="https://braverman.kz/" />
+  <meta property="og:title" content="Тест Бравермана — ваш нейропрофиль" />
+  <meta property="og:description" content="Дофамин, ацетилхолин, ГАМК, серотонин: узнайте свой доминирующий тип и получите видео-разбор." />
+  <meta property="og:url" content="https://braverman.kz/" />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main class="app">
@@ -33,26 +39,23 @@
         <p id="nameError" class="error" hidden></p>
         <button id="startBtn" class="btn btn-primary btn-block">Начать тест</button>
         <p class="hint subtle" id="t-startHint"></p>
+        <a href="#" id="recoverLink" class="recover-link"></a>
       </div>
     </section>
 
     <!-- ЭКРАН 2: ВОПРОСЫ -->
     <section id="quiz" class="screen">
       <div class="quiz-top">
-        <div class="progress">
-          <div id="progressBar" class="progress-bar"></div>
-        </div>
+        <div class="progress"><div id="progressBar" class="progress-bar"></div></div>
         <div class="progress-meta">
           <button id="backBtn" class="btn-text">← Назад</button>
           <span id="counter"></span>
         </div>
       </div>
-
       <div class="card quiz-card" id="quizCard">
         <p class="q-index" id="qIndex">01</p>
         <h2 class="question" id="questionText">—</h2>
       </div>
-
       <div class="answers">
         <button id="noBtn" class="btn btn-answer btn-no">Нет</button>
         <button id="yesBtn" class="btn btn-answer btn-yes">Да</button>
@@ -60,53 +63,62 @@
       <p class="hint subtle" id="t-keyHint"></p>
     </section>
 
-    <!-- ЭКРАН 3: РЕЗУЛЬТАТ -->
+    <!-- ЭКРАН 3: ТИЗЕР + ОПЛАТА (рисуется скриптом) -->
+    <section id="checkout" class="screen"></section>
+
+    <!-- ЭКРАН 4: ОЖИДАНИЕ ОПЛАТЫ (рисуется скриптом) -->
+    <section id="waiting" class="screen"></section>
+
+    <!-- ЭКРАН 5: РЕЗУЛЬТАТ -->
     <section id="result" class="screen">
-      <div class="card result-card">
-        <p class="result-eyebrow" id="t-resultEyebrow">Ваш результат</p>
-        <h2 id="dominantTitle" class="dominant-title">—</h2>
-        <p id="dominantMeta" class="dominant-meta">—</p>
-        <p id="dominantDesc" class="dominant-desc">—</p>
-      </div>
-
-      <div class="card chart-card">
-        <h3 class="chart-title" id="t-chartTitle">Профиль нейромедиаторов</h3>
-        <div class="chart-wrap">
-          <canvas id="chart"></canvas>
+      <div id="resultLoading" class="card centered"><span class="pay-spinner"></span></div>
+      <p id="resultError" class="card error" hidden></p>
+      <div id="resultBody" hidden>
+        <div class="card result-card">
+          <p class="result-eyebrow" id="t-resultEyebrow">Ваш результат</p>
+          <h2 id="dominantTitle" class="dominant-title">—</h2>
+          <p id="dominantMeta" class="dominant-meta">—</p>
+          <p id="dominantDesc" class="dominant-desc">—</p>
         </div>
-        <ul id="scoreList" class="score-list"></ul>
-        <p id="lowNote" class="low-note"></p>
-      </div>
 
-      <div class="card video-card" id="videoCard" hidden>
-        <div class="video-head">
-          <h3 class="chart-title" id="videoTitle"></h3>
-          <div class="lang-switch" id="videoLangSwitch"></div>
+        <div class="card chart-card">
+          <h3 class="chart-title" id="t-chartTitle">Профиль нейромедиаторов</h3>
+          <div class="chart-wrap"><canvas id="chart"></canvas></div>
+          <ul id="scoreList" class="score-list"></ul>
+          <p id="lowNote" class="low-note"></p>
         </div>
-        <div class="video-wrap">
-          <video id="videoPlayer" controls playsinline preload="metadata"
-                 controlslist="nodownload" hidden></video>
-          <iframe id="videoFrame" src="" title="Video"
-                  loading="lazy" frameborder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowfullscreen hidden></iframe>
-        </div>
-      </div>
 
-      <div class="result-actions">
-        <button id="downloadBtn" class="btn btn-secondary">Скачать график</button>
-        <button id="restartBtn" class="btn btn-primary">Пройти заново</button>
+        <div class="card video-card" id="videoCard" hidden>
+          <div class="video-head">
+            <h3 class="chart-title" id="videoTitle"></h3>
+            <div class="lang-switch" id="videoLangSwitch"></div>
+          </div>
+          <div class="video-wrap">
+            <video id="videoPlayer" controls playsinline preload="metadata" controlslist="nodownload" hidden></video>
+            <iframe id="videoFrame" src="" title="Video" loading="lazy" frameborder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowfullscreen hidden></iframe>
+          </div>
+        </div>
+
+        <div class="card link-card">
+          <h3 class="chart-title" id="t-linkTitle"></h3>
+          <p class="hint" id="t-linkHint" style="text-align:left;margin:0 0 12px"></p>
+          <div class="link-box"><code id="resultLinkText"></code><button id="copyLinkBtn" class="btn btn-secondary btn-sm"></button></div>
+          <a id="shareWaBtn" class="btn btn-secondary btn-block" target="_blank" rel="noopener"></a>
+        </div>
+
+        <div class="result-actions">
+          <button id="downloadBtn" class="btn btn-secondary">Скачать график</button>
+          <button id="restartBtn" class="btn btn-primary">Пройти заново</button>
+        </div>
       </div>
-      <p id="saveStatus" class="hint subtle"></p>
     </section>
 
-  </main>
+    <!-- ЭКРАН 6: ВОССТАНОВЛЕНИЕ РЕЗУЛЬТАТА (рисуется скриптом) -->
+    <section id="recover" class="screen"></section>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="content-ru.js"></script>
-  <script src="content-kk.js"></script>
-  <script src="data.js"></script>
-  <script src="videos.js"></script>
-  <script src="app.js"></script>
+  </main>
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

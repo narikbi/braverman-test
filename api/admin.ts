@@ -1,0 +1,424 @@
+// /api/admin?action=<...> — единый роутер админки и кабинета тренера (лимит функций Vercel).
+// GET: me, health, overview, funnel, timeline, sources, trainers-stats, attempts, attempt, payments, export, trainers, trainer
+// POST (JSON, заголовок X-Requested-With: admin): login, logout, attempt-update, attempt-grant, attempt-resend,
+//       trainer-create, trainer-update, trainer-password
+// Роль trainer видит только свои попытки (scope по trainer_id / trainer_code); POST-действия ей запрещены.
+import { adminConfigured, checkCredentials, makeSession, sessionFromReq, sessionCookie, clearCookie, hashPassword, verifyPassword, type Session } from './_admin-auth.js'
+import {
+  dbConfigured, q, ipHash, logEvent, ATTEMPT_STATUSES, type AttemptRow, getAttempt, setAttemptNotes, grantManualPaid, setPaymentLinkSent,
+  listTrainers, getTrainer, createTrainer, updateTrainer, setTrainerPassword, findTrainerByLogin, touchTrainerLogin
+} from './_db.js'
+import { sendWhatsApp, whatsappConfigured } from './_whatsapp.js'
+import { resultLinkMessage } from './_wa-text.js'
+import { resultLink } from './_fulfill.js'
+import { kpaConfigured } from './_kpa.js'
+import { tgConfigured, tgCall, SITE, PRICE, bodyOf, queryOf } from './_lib.js'
+
+type Req = { method?: string; url?: string; headers: Record<string, string | string[] | undefined>; query?: Record<string, string | string[] | undefined>; body?: unknown }
+type Res = { status: (code: number) => { json: (o: object) => void }; setHeader: (k: string, v: string) => void }
+
+const TZ = '+05:00' // Asia/Almaty, без перехода на летнее время
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+// ── период ──
+type Range = { from: Date; to: Date; prevFrom: Date; prevTo: Date; bucket: 'hour' | 'day'; label: string }
+
+function almatyDate(d: Date): string {
+  return new Date(d.getTime() + 5 * 3600000).toISOString().slice(0, 10)
+}
+function parseRange(p: URLSearchParams): Range {
+  const preset = p.get('range') || '7d'
+  const today = almatyDate(new Date())
+  const day = (s: string, plus = 0) => new Date(new Date(`${s}T00:00:00${TZ}`).getTime() + plus * 86400000)
+  let from: Date
+  let to: Date
+  if (preset === 'custom' && /^\d{4}-\d{2}-\d{2}$/.test(p.get('from') || '') && /^\d{4}-\d{2}-\d{2}$/.test(p.get('to') || '')) {
+    from = day(p.get('from')!)
+    to = day(p.get('to')!, 1)
+  } else if (preset === 'today') {
+    from = day(today)
+    to = day(today, 1)
+  } else if (preset === 'all') {
+    from = new Date('2026-01-01T00:00:00Z')
+    to = day(today, 1)
+  } else {
+    const n = preset === '30d' ? 30 : 7
+    from = day(today, -(n - 1))
+    to = day(today, 1)
+  }
+  const len = to.getTime() - from.getTime()
+  return { from, to, prevFrom: new Date(from.getTime() - len), prevTo: from, bucket: len <= 2 * 86400000 ? 'hour' : 'day', label: preset }
+}
+
+// ── scope: админ видит всё, тренер — только своё ──
+type Scope = { trainerId: number | null; trainerCode: string | null }
+
+const FUNNEL_TYPES = ['page_view', 'quiz_start', 'quiz_finish', 'checkout_view', 'invoice_created', 'paid', 'result_view']
+const FUNNEL_LABELS: Record<string, string> = {
+  page_view: 'Открыли сайт', quiz_start: 'Начали тест', quiz_finish: 'Закончили тест', checkout_view: 'Экран оплаты',
+  invoice_created: 'Счёт выставлен', paid: 'Оплатили', result_view: 'Открыли результат'
+}
+
+async function funnelCounts(from: Date, to: Date, s: Scope): Promise<Record<string, number>> {
+  const rows = await q<{ type: string; n: string }>('funnel', `
+    SELECT type, count(DISTINCT COALESCE(sid, 'a' || attempt_id::text, id::text)) AS n
+    FROM events WHERE ts >= $1 AND ts < $2 AND type = ANY($3::text[]) AND ($4::text IS NULL OR trainer_code = $4)
+    GROUP BY type`, [from, to, FUNNEL_TYPES, s.trainerCode])
+  const out: Record<string, number> = {}
+  for (const t of FUNNEL_TYPES) out[t] = 0
+  for (const r of rows) out[r.type] = Number(r.n)
+  return out
+}
+
+// Попытки и оплаты тренера считаем по коду ссылки (trainer_code), а не по trainer_id:
+// код записывается всегда, даже если тренера зарегистрировали позже прихода клиента.
+async function kpi(from: Date, to: Date, s: Scope) {
+  const [f, rev, att] = await Promise.all([
+    funnelCounts(from, to, s),
+    q<{ revenue: string; paid: string }>('revenue', `
+      SELECT COALESCE(sum(p.amount), 0) AS revenue, count(*) AS paid FROM payments p
+      LEFT JOIN attempts a ON a.id = p.attempt_id
+      WHERE p.status = 'paid' AND p.paid_at >= $1 AND p.paid_at < $2 AND ($3::text IS NULL OR a.trainer_code = $3)`, [from, to, s.trainerCode]),
+    q<{ started: string; finished: string }>('kpi_attempts', `
+      SELECT count(*) FILTER (WHERE created_at >= $1 AND created_at < $2) AS started,
+             count(*) FILTER (WHERE finished_at >= $1 AND finished_at < $2) AS finished
+      FROM attempts WHERE ($3::text IS NULL OR trainer_code = $3)`, [from, to, s.trainerCode])
+  ])
+  const paid = Number(rev[0]?.paid ?? 0)
+  const started = Number(att[0]?.started ?? 0)
+  const finished = Number(att[0]?.finished ?? 0)
+  return {
+    visits: f.page_view, started, finished, checkouts: f.checkout_view, invoices: f.invoice_created,
+    paid, revenue: Number(rev[0]?.revenue ?? 0), results: f.result_view,
+    convVisitPaid: f.page_view ? +((paid / f.page_view) * 100).toFixed(2) : 0,
+    convFinishPaid: finished ? +((paid / finished) * 100).toFixed(1) : 0,
+    convStartFinish: started ? +((finished / started) * 100).toFixed(1) : 0
+  }
+}
+
+const ATTEMPT_SORT: Record<string, string> = { created_at: 'a.created_at', name: 'a.name', status: 'a.status', paid_at: 'a.paid_at', dominant: 'a.dominant', answered: 'a.answered' }
+
+const maskPhone = (p: string | null) => (p ? p.slice(0, 5) + '•••••' + p.slice(-2) : p)
+const seesPhone = (s: Session) => s.role === 'admin' || process.env.TRAINER_SEES_PHONE !== '0'
+
+async function fetchJson(url: string, init: RequestInit = {}, ms = 5000): Promise<{ ok: boolean; ms: number; data: Record<string, unknown> | null }> {
+  const t0 = Date.now()
+  try {
+    const res = await fetch(url, { ...init, signal: AbortSignal.timeout(ms) })
+    const text = await res.text()
+    let data: Record<string, unknown> | null = null
+    try { data = JSON.parse(text) } catch { /* not json */ }
+    return { ok: res.ok, ms: Date.now() - t0, data }
+  } catch {
+    return { ok: false, ms: Date.now() - t0, data: null }
+  }
+}
+
+function csvEscape(v: unknown): string {
+  const s = v == null ? '' : String(v)
+  return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+const CODE_RE = /^[a-z0-9_-]{2,32}$/
+
+export default async function handler(req: Req, res: Res) {
+  res.setHeader('Cache-Control', 'no-store')
+  const p = queryOf(req)
+  const action = p.get('action') || ''
+  const isPost = req.method === 'POST'
+
+  if (!adminConfigured()) return res.status(503).json({ ok: false, error: 'admin_not_configured' })
+
+  // ── вход/выход (без сессии) ──
+  if (action === 'login') {
+    if (!isPost) return res.status(405).json({ ok: false })
+    if (req.headers['x-requested-with'] !== 'admin') return res.status(403).json({ ok: false, error: 'csrf' })
+    const ip = ipHash(req.headers)
+    const fails = await q<{ n: string }>('login_fails',
+      `SELECT count(*) AS n FROM events WHERE type IN ('admin_login_fail','trainer_login_fail') AND ip_hash = $1 AND ts > now() - interval '15 minutes'`, [ip])
+    if (Number(fails[0]?.n ?? 0) >= 10) return res.status(429).json({ ok: false, error: 'locked' })
+    const { login = '', password = '' } = bodyOf(req) as { login?: string; password?: string }
+
+    if (checkCredentials(String(login), String(password))) {
+      await logEvent({ type: 'admin_login_ok', ipHash: ip })
+      res.setHeader('Set-Cookie', sessionCookie(makeSession('admin')))
+      return res.status(200).json({ ok: true, role: 'admin' })
+    }
+    const tr = await findTrainerByLogin(String(login).trim().toLowerCase())
+    if (tr && tr.active && verifyPassword(String(password), tr.password_hash)) {
+      await logEvent({ type: 'trainer_login_ok', ipHash: ip, props: { trainerId: tr.id } })
+      await touchTrainerLogin(tr.id)
+      res.setHeader('Set-Cookie', sessionCookie(makeSession('trainer', tr.id)))
+      return res.status(200).json({ ok: true, role: 'trainer' })
+    }
+    await logEvent({ type: tr ? 'trainer_login_fail' : 'admin_login_fail', ipHash: ip })
+    await sleep(300)
+    return res.status(401).json({ ok: false, error: 'bad_credentials' })
+  }
+  if (action === 'logout') {
+    res.setHeader('Set-Cookie', clearCookie())
+    return res.status(200).json({ ok: true })
+  }
+
+  // ── всё остальное — только с сессией ──
+  const session = sessionFromReq(req.headers)
+  if (!session) return res.status(401).json({ ok: false, error: 'unauthorized' })
+  if (isPost && req.headers['x-requested-with'] !== 'admin') return res.status(403).json({ ok: false, error: 'csrf' })
+  const isAdmin = session.role === 'admin'
+
+  let scope: Scope = { trainerId: null, trainerCode: null }
+  let trainerMe: { id: number; name: string; code: string } | null = null
+  if (!isAdmin) {
+    const t = await getTrainer(session.tid!)
+    if (!t || !t.active) { res.setHeader('Set-Cookie', clearCookie()); return res.status(401).json({ ok: false, error: 'unauthorized' }) }
+    scope = { trainerId: Number(t.id), trainerCode: t.code }
+    trainerMe = { id: Number(t.id), name: t.name, code: t.code }
+    if (isPost) return res.status(403).json({ ok: false, error: 'forbidden' })
+  }
+
+  if (action === 'me') {
+    return res.status(200).json({ ok: true, role: session.role, trainer: trainerMe, statuses: ATTEMPT_STATUSES, db: dbConfigured(), site: SITE(), price: PRICE(), seesPhone: seesPhone(session) })
+  }
+
+  if (action === 'health') {
+    if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' })
+    const gw = process.env.KASPI_GW_URL?.replace(/\/$/, '')
+    const wa = process.env.WA_API_URL?.replace(/\/$/, '')
+    const t0 = Date.now()
+    const [dbPing, kaspi, whatsapp, tg, last] = await Promise.all([
+      q<{ one: number }>('ping', 'SELECT 1 AS one'),
+      gw ? fetchJson(`${gw}/health`) : null,
+      wa ? fetchJson(`${wa}/health`) : null,
+      tgConfigured() ? tgCall('getMe', {}).then(() => true).catch(() => false) : null,
+      q<{ type: string; ts: string }>('last_events', `SELECT type, max(ts) AS ts FROM events WHERE type IN ('webhook_kpa','paid','invoice_created','quiz_start','page_view') GROUP BY type`)
+    ])
+    const lastMap: Record<string, string> = {}
+    for (const r of last) lastMap[r.type] = r.ts
+    const sessionLost = await q<{ ts: string }>('last_session_lost', `SELECT max(ts) AS ts FROM events WHERE type = 'webhook_kpa' AND props->>'status' = 'SessionExpired'`)
+    return res.status(200).json({
+      ok: true,
+      checks: {
+        db: { configured: dbConfigured(), ok: dbPing.length > 0, ms: Date.now() - t0 },
+        kaspiGw: { configured: !!gw && kpaConfigured(), ok: !!kaspi?.ok, ms: kaspi?.ms ?? null, hasSession: !!kaspi?.data?.hasSession, cashier: kaspi?.data?.cashier ?? null, sessionSavedAt: kaspi?.data?.sessionSavedAt ?? null, url: gw ?? null },
+        wa: { configured: whatsappConfigured(), ok: !!whatsapp?.ok, ms: whatsapp?.ms ?? null, connected: !!whatsapp?.data?.connected, url: wa ?? null, numbers: (whatsapp?.data?.numbers as unknown[] | undefined) ?? [] },
+        telegram: { configured: tgConfigured(), ok: tg === true }
+      },
+      last: { ...lastMap, sessionExpired: sessionLost[0]?.ts ?? null },
+      env: { siteUrl: SITE(), price: PRICE(), simulate: process.env.SIMULATE_PAYMENT === '1', testToken: !!process.env.TEST_TOKEN }
+    })
+  }
+
+  if (!dbConfigured()) return res.status(503).json({ ok: false, error: 'db_not_configured' })
+  const r = parseRange(p)
+
+  if (action === 'overview') {
+    const [cur, prev] = await Promise.all([kpi(r.from, r.to, scope), kpi(r.prevFrom, r.prevTo, scope)])
+    return res.status(200).json({ ok: true, range: { from: r.from, to: r.to, bucket: r.bucket, label: r.label }, kpi: cur, prev })
+  }
+
+  if (action === 'funnel') {
+    const f = await funnelCounts(r.from, r.to, scope)
+    return res.status(200).json({ ok: true, stages: FUNNEL_TYPES.map(t => ({ key: t, label: FUNNEL_LABELS[t], count: f[t] })) })
+  }
+
+  if (action === 'timeline') {
+    const rows = await q<{ t: string; views: string; started: string; finished: string; paid: string; revenue: string }>('timeline', `
+      SELECT date_trunc($3, ts AT TIME ZONE 'Asia/Almaty') AS t,
+        count(DISTINCT sid) FILTER (WHERE type = 'page_view')   AS views,
+        count(*) FILTER (WHERE type = 'quiz_start')              AS started,
+        count(*) FILTER (WHERE type = 'quiz_finish')             AS finished,
+        count(*) FILTER (WHERE type = 'paid')                    AS paid,
+        COALESCE(sum((props->>'amount')::numeric) FILTER (WHERE type = 'paid' AND props->>'amount' ~ '^[0-9.]+$'), 0) AS revenue
+      FROM events WHERE ts >= $1 AND ts < $2 AND ($4::text IS NULL OR trainer_code = $4) GROUP BY 1 ORDER BY 1`, [r.from, r.to, r.bucket, scope.trainerCode])
+    return res.status(200).json({
+      ok: true, bucket: r.bucket, from: r.from, to: r.to,
+      points: rows.map(x => ({ t: x.t, views: +x.views, started: +x.started, finished: +x.finished, paid: +x.paid, revenue: +x.revenue }))
+    })
+  }
+
+  if (action === 'sources') {
+    const rows = await q<Record<string, string>>('sources', `
+      SELECT COALESCE(utm->>'utm_source', CASE WHEN trainer_code IS NOT NULL THEN 'тренер:' || trainer_code ELSE '(прямые)' END) AS source,
+        COALESCE(utm->>'utm_medium', '') AS medium, COALESCE(utm->>'utm_campaign', '') AS campaign, COALESCE(utm->>'utm_content', '') AS content,
+        count(DISTINCT sid) FILTER (WHERE type = 'page_view')  AS views,
+        count(*) FILTER (WHERE type = 'quiz_start')            AS started,
+        count(*) FILTER (WHERE type = 'quiz_finish')           AS finished,
+        count(*) FILTER (WHERE type = 'invoice_created')       AS invoices,
+        count(*) FILTER (WHERE type = 'paid')                  AS paid,
+        COALESCE(sum((props->>'amount')::numeric) FILTER (WHERE type = 'paid' AND props->>'amount' ~ '^[0-9.]+$'), 0) AS revenue
+      FROM events WHERE ts >= $1 AND ts < $2 AND ($3::text IS NULL OR trainer_code = $3)
+      GROUP BY 1, 2, 3, 4 ORDER BY views DESC, paid DESC LIMIT 60`, [r.from, r.to, scope.trainerCode])
+    return res.status(200).json({ ok: true, rows: rows.map(x => ({ ...x, views: +x.views, started: +x.started, finished: +x.finished, invoices: +x.invoices, paid: +x.paid, revenue: +x.revenue })) })
+  }
+
+  if (action === 'trainers-stats') {
+    if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' })
+    const rows = await q<Record<string, string>>('trainers_stats', `
+      SELECT t.id, t.code, t.name, t.active,
+        (SELECT count(DISTINCT e.sid) FROM events e WHERE e.trainer_code = t.code AND e.type = 'page_view' AND e.ts >= $1 AND e.ts < $2) AS visits,
+        count(a.id) FILTER (WHERE a.created_at >= $1 AND a.created_at < $2)   AS started,
+        count(a.id) FILTER (WHERE a.finished_at >= $1 AND a.finished_at < $2) AS finished,
+        count(a.id) FILTER (WHERE a.paid_at >= $1 AND a.paid_at < $2)         AS paid,
+        COALESCE((SELECT sum(p.amount) FROM payments p JOIN attempts a2 ON a2.id = p.attempt_id
+                  WHERE a2.trainer_code = t.code AND p.status = 'paid' AND p.paid_at >= $1 AND p.paid_at < $2), 0) AS revenue
+      FROM trainers t LEFT JOIN attempts a ON a.trainer_code = t.code
+      GROUP BY t.id ORDER BY paid DESC, started DESC, t.name`, [r.from, r.to])
+    const unknown = await q<{ code: string; visits: string; started: string }>('unknown_codes', `
+      SELECT trainer_code AS code, count(DISTINCT sid) FILTER (WHERE type = 'page_view') AS visits, count(*) FILTER (WHERE type = 'quiz_start') AS started
+      FROM events WHERE ts >= $1 AND ts < $2 AND trainer_code IS NOT NULL AND trainer_code NOT IN (SELECT code FROM trainers)
+      GROUP BY 1 ORDER BY visits DESC LIMIT 20`, [r.from, r.to])
+    return res.status(200).json({
+      ok: true,
+      rows: rows.map(x => ({ id: +x.id, code: x.code, name: x.name, active: x.active as unknown as boolean, visits: +x.visits, started: +x.started, finished: +x.finished, paid: +x.paid, revenue: +x.revenue })),
+      unknown: unknown.map(u => ({ code: u.code, visits: +u.visits, started: +u.started }))
+    })
+  }
+
+  if (action === 'attempts' || action === 'export') {
+    const status = p.get('status') || null
+    const lang = p.get('lang') === 'kk' || p.get('lang') === 'ru' ? p.get('lang') : null
+    // фильтр по тренеру — по коду ссылки (см. kpi)
+    let trainerCode: string | null = scope.trainerCode
+    if (isAdmin && Number(p.get('trainer'))) trainerCode = (await getTrainer(Number(p.get('trainer'))))?.code ?? '__none__'
+    const search = (p.get('q') || '').trim().slice(0, 60) || null
+    const sort = ATTEMPT_SORT[p.get('sort') || ''] || 'a.created_at'
+    const dir = p.get('dir') === 'asc' ? 'ASC' : 'DESC'
+    const limit = action === 'export' ? 5000 : Math.min(100, Math.max(1, Number(p.get('limit') || 25)))
+    const page = Math.max(1, Number(p.get('page') || 1))
+    const rows = await q<Record<string, unknown> & { total: string; phone: string | null }>('attempts', `
+      SELECT a.id, a.created_at, a.name, a.phone, a.lang, a.status, a.answered, a.dominant, a.combo, a.paid_by,
+             a.dopamine, a.acetylcholine, a.gaba, a.serotonin, a.finished_at, a.paid_at, a.test_amount, a.invoice_id, a.trainer_code,
+             a.utm->>'utm_source' AS source, a.utm->>'utm_campaign' AS campaign, t.name AS trainer_name, t.id AS trainer_id,
+             count(*) OVER () AS total
+      FROM attempts a LEFT JOIN trainers t ON t.id = a.trainer_id
+      WHERE a.created_at >= $1 AND a.created_at < $2
+        AND ($3::text IS NULL OR a.status = $3)
+        AND ($4::text IS NULL OR a.phone ILIKE '%' || $4 || '%' OR a.name ILIKE '%' || $4 || '%')
+        AND ($5::text IS NULL OR a.trainer_code = $5)
+        AND ($6::text IS NULL OR a.lang = $6)
+      ORDER BY ${sort} ${dir} NULLS LAST, a.id DESC LIMIT $7 OFFSET $8`, [r.from, r.to, status, search, trainerCode, lang, limit, (page - 1) * limit])
+    const total = Number(rows[0]?.total ?? 0)
+    const items = rows.map(({ total: _t, ...x }) => (seesPhone(session) ? x : { ...x, phone: maskPhone(x.phone) }))
+    if (action === 'export') {
+      const head = ['id', 'created_at', 'name', 'phone', 'lang', 'status', 'answered', 'dopamine', 'acetylcholine', 'gaba', 'serotonin', 'dominant', 'combo', 'trainer_name', 'trainer_code', 'source', 'campaign', 'invoice_id', 'paid_at', 'paid_by']
+      const cell = (v: unknown) => csvEscape(v instanceof Date ? v.toISOString() : v)
+      const csv = [head.join(';'), ...items.map(x => head.map(h => cell((x as Record<string, unknown>)[h])).join(';'))].join('\n')
+      return res.status(200).json({ ok: true, filename: `braverman_${r.label}_${almatyDate(new Date())}.csv`, csv: '﻿' + csv })
+    }
+    return res.status(200).json({ ok: true, items, total, page, limit })
+  }
+
+  if (action === 'attempt') {
+    const id = Number(p.get('id'))
+    if (!id) return res.status(400).json({ ok: false, error: 'id' })
+    const a = await getAttempt(id)
+    if (!a || (!isAdmin && a.trainer_code !== scope.trainerCode)) return res.status(404).json({ ok: false, error: 'not_found' })
+    const [payments, events, trainer] = await Promise.all([
+      isAdmin ? q('attempt_payments', 'SELECT invoice_id, provider, amount, status, source, link_sent, created_at, paid_at FROM payments WHERE attempt_id = $1 ORDER BY created_at DESC', [id]) : Promise.resolve([]),
+      q('attempt_events', `SELECT ts, type, step, props FROM events WHERE attempt_id = $1 OR ($2::text IS NOT NULL AND sid = $2 AND ts >= $3::timestamptz - interval '1 hour' AND ts <= COALESCE($4::timestamptz, now()) + interval '1 day') ORDER BY ts DESC LIMIT 300`, [id, a.sid, a.created_at, a.paid_at]),
+      a.trainer_id ? getTrainer(a.trainer_id) : Promise.resolve(null)
+    ])
+    const attempt: Partial<AttemptRow> = { ...a }
+    if (!isAdmin) { delete attempt.notes; delete attempt.invoice_error; delete attempt.invoice_ref; if (!seesPhone(session)) attempt.phone = maskPhone(a.phone) }
+    return res.status(200).json({ ok: true, attempt, payments, events, trainer: trainer ? { id: trainer.id, name: trainer.name, code: trainer.code } : null, resultLink: a.status === 'paid' ? resultLink(a.id) : null })
+  }
+
+  if (action === 'payments') {
+    if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' })
+    const status = p.get('status') || null
+    const limit = Math.min(100, Math.max(1, Number(p.get('limit') || 25)))
+    const page = Math.max(1, Number(p.get('page') || 1))
+    const rows = await q<Record<string, unknown> & { total: string }>('payments', `
+      SELECT p.id, p.invoice_id, p.provider, p.phone, p.amount, p.status, p.source, p.link_sent, p.created_at, p.paid_at, p.attempt_id,
+             a.name AS attempt_name, count(*) OVER () AS total
+      FROM payments p LEFT JOIN attempts a ON a.id = p.attempt_id
+      WHERE p.created_at >= $1 AND p.created_at < $2 AND ($3::text IS NULL OR p.status = $3)
+      ORDER BY p.created_at DESC LIMIT $4 OFFSET $5`, [r.from, r.to, status, limit, (page - 1) * limit])
+    return res.status(200).json({ ok: true, items: rows.map(({ total: _t, ...x }) => x), total: Number(rows[0]?.total ?? 0), page, limit })
+  }
+
+  if (action === 'trainers') {
+    if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' })
+    return res.status(200).json({ ok: true, items: await listTrainers() })
+  }
+
+  if (action === 'trainer') {
+    if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' })
+    const id = Number(p.get('id'))
+    const t = id ? await getTrainer(id) : null
+    if (!t) return res.status(404).json({ ok: false, error: 'not_found' })
+    const s: Scope = { trainerId: t.id, trainerCode: t.code }
+    const [k, prev, f] = await Promise.all([kpi(r.from, r.to, s), kpi(r.prevFrom, r.prevTo, s), funnelCounts(r.from, r.to, s)])
+    return res.status(200).json({ ok: true, trainer: t, link: `${SITE()}/t/${t.code}`, kpi: k, prev, funnel: FUNNEL_TYPES.map(x => ({ key: x, label: FUNNEL_LABELS[x], count: f[x] })) })
+  }
+
+  // ── POST-действия (только админ) ──
+  if (action === 'attempt-update') {
+    if (!isPost) return res.status(405).json({ ok: false })
+    const b = bodyOf(req) as { id?: number; notes?: string }
+    const id = Number(b.id)
+    if (!id || typeof b.notes !== 'string') return res.status(400).json({ ok: false, error: 'id' })
+    return res.status(200).json({ ok: true, attempt: await setAttemptNotes(id, b.notes) })
+  }
+
+  // Ручная выдача результата (оплата вне сайта); send=true — ещё и отправить ссылку в WhatsApp
+  if (action === 'attempt-grant' || action === 'attempt-resend') {
+    if (!isPost) return res.status(405).json({ ok: false })
+    const b = bodyOf(req) as { id?: number; send?: boolean }
+    const id = Number(b.id)
+    if (!id) return res.status(400).json({ ok: false, error: 'id' })
+    let a = await getAttempt(id)
+    if (!a) return res.status(404).json({ ok: false, error: 'not_found' })
+    if (action === 'attempt-grant') {
+      if (a.dominant == null) return res.status(400).json({ ok: false, error: 'not_finished' })
+      a = (await grantManualPaid(id)) ?? a
+    }
+    if (a.status !== 'paid') return res.status(400).json({ ok: false, error: 'unpaid' })
+    const link = resultLink(id)
+    let waSent = false
+    if ((b.send || action === 'attempt-resend') && a.phone) {
+      waSent = (await sendWhatsApp(a.phone, resultLinkMessage(a.name, link, a.lang))).sent
+      if (a.invoice_id) await setPaymentLinkSent(a.invoice_id, waSent)
+    }
+    await logEvent({ type: action === 'attempt-grant' ? 'access_granted' : 'link_resent', attemptId: id, props: { by: 'admin', waSent } })
+    return res.status(200).json({ ok: true, link, waSent })
+  }
+
+  if (action === 'trainer-create' || action === 'trainer-update') {
+    if (!isPost) return res.status(405).json({ ok: false })
+    const b = bodyOf(req) as { id?: number; code?: string; name?: string; phone?: string; notes?: string; active?: boolean; login?: string; password?: string }
+    const code = b.code !== undefined ? String(b.code).trim().toLowerCase() : undefined
+    if (code !== undefined && !CODE_RE.test(code)) return res.status(400).json({ ok: false, error: 'code' })
+    const login = b.login !== undefined ? String(b.login).trim().toLowerCase() || null : undefined
+    if (login && !/^[a-z0-9_.@-]{3,64}$/.test(login)) return res.status(400).json({ ok: false, error: 'login' })
+    try {
+      if (action === 'trainer-create') {
+        if (!code || !b.name?.trim()) return res.status(400).json({ ok: false, error: 'fields' })
+        const t = await createTrainer({ code, name: String(b.name).trim(), phone: b.phone ? String(b.phone) : '', notes: b.notes ? String(b.notes) : '', login, passwordHash: b.password ? hashPassword(String(b.password)) : null })
+        await logEvent({ type: 'trainer_created', props: { trainerId: t.id, code } })
+        return res.status(200).json({ ok: true, trainer: t, link: `${SITE()}/t/${t.code}` })
+      }
+      const id = Number(b.id)
+      if (!id) return res.status(400).json({ ok: false, error: 'id' })
+      const t = await updateTrainer(id, { code, name: b.name?.trim() || undefined, phone: b.phone !== undefined ? String(b.phone) : undefined, notes: b.notes !== undefined ? String(b.notes) : undefined, active: typeof b.active === 'boolean' ? b.active : undefined, login })
+      if (!t) return res.status(404).json({ ok: false, error: 'not_found' })
+      return res.status(200).json({ ok: true, trainer: t, link: `${SITE()}/t/${t.code}` })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (/unique|duplicate/i.test(msg)) return res.status(409).json({ ok: false, error: /login/.test(msg) ? 'login_taken' : 'code_taken' })
+      throw e
+    }
+  }
+
+  if (action === 'trainer-password') {
+    if (!isPost) return res.status(405).json({ ok: false })
+    const b = bodyOf(req) as { id?: number; password?: string }
+    const id = Number(b.id)
+    if (!id || !b.password || String(b.password).length < 6) return res.status(400).json({ ok: false, error: 'password' })
+    await setTrainerPassword(id, hashPassword(String(b.password)))
+    await logEvent({ type: 'trainer_password_set', props: { trainerId: id } })
+    return res.status(200).json({ ok: true })
+  }
+
+  return res.status(404).json({ ok: false, error: 'unknown_action' })
+}
