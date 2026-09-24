@@ -40,17 +40,20 @@ export function renderCheckout(opts: { loading?: boolean; keepPhone?: boolean } 
         </div>
       </div>
 
+      <!-- оплата сразу под графиком: на телефоне кнопка должна быть видна без прокрутки -->
+      <div class="pay-block">
+        <label class="field">
+          <span>${esc(u.phoneLabel)}</span>
+          <input id="phoneInput" type="tel" inputmode="tel" autocomplete="tel" placeholder="${esc(u.phonePlaceholder)}" value="${esc(prevPhone || '')}" ${opts.loading ? 'disabled' : ''} />
+        </label>
+        <input id="hp" name="website" class="hp" type="text" tabindex="-1" autocomplete="off" />
+        <p id="phoneError" class="error" hidden></p>
+        <button id="payBtn" class="btn btn-primary btn-block" ${opts.loading ? 'disabled' : ''}>${esc(opts.loading ? u.sending : u.payBtn(fmtPrice(PRICE_KZT)))}</button>
+        <p class="hint subtle">${esc(u.priceNote)}</p>
+      </div>
+
       <ul class="benefits">${u.benefits.map(b => `<li>${esc(b)}</li>`).join('')}</ul>
       ${authorRow('author-laugh.webp', T().ui.authorVideoRole)}
-
-      <label class="field">
-        <span>${esc(u.phoneLabel)}</span>
-        <input id="phoneInput" type="tel" inputmode="tel" autocomplete="tel" placeholder="${esc(u.phonePlaceholder)}" value="${esc(prevPhone || '')}" ${opts.loading ? 'disabled' : ''} />
-      </label>
-      <input id="hp" name="website" class="hp" type="text" tabindex="-1" autocomplete="off" />
-      <p id="phoneError" class="error" hidden></p>
-      <button id="payBtn" class="btn btn-primary btn-block" ${opts.loading ? 'disabled' : ''}>${esc(opts.loading ? u.sending : u.payBtn(fmtPrice(PRICE_KZT)))}</button>
-      <p class="hint subtle">${esc(u.priceNote)}</p>
     </div>`
   showScreen('checkout')
   renderProfileChart($<HTMLCanvasElement>('teaserChart'), scores, QUESTIONS_PER_BLOCK, teaser.dominant, NEURO_ORDER.map(k => T().neuro[k].name), { minimal: true })

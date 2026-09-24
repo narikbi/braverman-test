@@ -470,3 +470,19 @@ a.btn-block { display: block; }
   color: #9CA3AF;
   text-align: center;
 }
+/* страница оплаты: кнопка сразу под графиком, компактнее, чтобы на телефоне была видна без прокрутки */
+.pay-block { margin-bottom: 26px; }
+.pay-block .btn-block { margin-top: 14px; }
+.pay-block .hint { margin-top: 10px; }
+.checkout-card .author-row { margin-bottom: 0; }
+@media (max-width: 480px) {
+  .teaser-chart .chart-wrap { height: 140px; }
+}
+/* невысокие телефоны (iPhone SE и т.п.): ещё компактнее, чтобы кнопка оплаты влезла в первый экран */
+@media (max-width: 480px) and (max-height: 700px) {
+  .checkout-card { padding-top: 24px; }
+  .checkout-card .lead { display: none; } /* дублирует заголовок «нейропрофиль готов» */
+  .checkout-card .result-eyebrow { margin-bottom: 12px; }
+  .teaser { margin-bottom: 14px; }
+  .teaser-chart .chart-wrap { height: 100px; }
+}
