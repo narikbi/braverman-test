@@ -5,7 +5,9 @@ import { T, onLangChange } from '../i18n'
 import { track } from '../analytics'
 import { checkout, ApiError } from '../api'
 import { renderProfileChart } from '../chart'
-import { NEURO_ORDER, QUESTIONS_PER_BLOCK, scoreAttempt } from '../../shared/scoring'
+import { NEURO_ORDER, QUESTIONS_PER_BLOCK, type NeuroKey } from '../../shared/scoring'
+
+const PLACEHOLDER_SCORES: Record<NeuroKey, number> = { dopamine: 25, acetylcholine: 25, gaba: 25, serotonin: 25 }
 import { renderWaiting } from './waiting'
 import { authorRow } from '../author'
 import { openResult } from './result'
@@ -20,9 +22,6 @@ export function initCheckout() {
 
 export function renderCheckout(opts: { loading?: boolean; keepPhone?: boolean } = {}) {
   const u = T().ui.checkout
-  const teaser = state.teaser ?? scoreAttempt(state.answers)
-  const dom = T().neuro[teaser.dominant]
-  const scores = scoreAttempt(state.answers).scores
   const prevPhone = opts.keepPhone ? $<HTMLInputElement>('phoneInput')?.value : ''
   const el = $('checkout')
   el.innerHTML = `
@@ -32,8 +31,9 @@ export function renderCheckout(opts: { loading?: boolean; keepPhone?: boolean } 
 
       <div class="teaser">
         <div class="teaser-label">${esc(u.teaserLabel)}</div>
-        <div class="teaser-type">${esc(dom.title)}</div>
-        <div class="teaser-meta">${esc(dom.name)} · ${esc(dom.lobe)}</div>
+        <!-- до оплаты ничего настоящего не показываем: вместо типа — размытая заглушка -->
+        <div class="teaser-type teaser-hidden" aria-hidden="true">Хххххххх ххххх</div>
+        <div class="teaser-meta teaser-hidden" aria-hidden="true">Хххххххххх · Ххххх хххххх</div>
         <div class="teaser-chart">
           <div class="chart-wrap blurred"><canvas id="teaserChart"></canvas></div>
           <div class="lock">🔒</div>
@@ -56,7 +56,8 @@ export function renderCheckout(opts: { loading?: boolean; keepPhone?: boolean } 
       ${authorRow('author-laugh.webp', T().ui.authorVideoRole)}
     </div>`
   showScreen('checkout')
-  renderProfileChart($<HTMLCanvasElement>('teaserChart'), scores, QUESTIONS_PER_BLOCK, teaser.dominant, NEURO_ORDER.map(k => T().neuro[k].name), { minimal: true })
+  // Условный ровный график (не баллы человека) под сильным размытием — форма ничего не выдаёт
+  renderProfileChart($<HTMLCanvasElement>('teaserChart'), PLACEHOLDER_SCORES, QUESTIONS_PER_BLOCK, null, NEURO_ORDER.map(k => T().neuro[k].name), { minimal: true })
 
   if (!viewTracked) { viewTracked = true; track('InitiateCheckout', { value: PRICE_KZT, currency: 'KZT' }) }
   if (opts.loading) return

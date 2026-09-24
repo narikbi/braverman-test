@@ -422,7 +422,9 @@ html, body {
 .teaser-meta { color: var(--accent); font-weight: 600; font-size: 14.5px; margin-top: 2px; }
 .teaser-chart { position: relative; margin-top: 14px; }
 .teaser-chart .chart-wrap { height: 180px; }
-.chart-wrap.blurred { filter: blur(6px); pointer-events: none; user-select: none; opacity: .85; }
+.chart-wrap.blurred { filter: blur(12px); pointer-events: none; user-select: none; opacity: .8; }
+/* скрытые тип и доля мозга на тизере — нечитаемое пятно */
+.teaser-hidden { filter: blur(9px); user-select: none; pointer-events: none; }
 .teaser-chart .lock {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   font-size: 40px; filter: drop-shadow(0 4px 12px rgba(26,26,46,.18));

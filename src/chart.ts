@@ -11,7 +11,7 @@ export function renderProfileChart(
   canvas: HTMLCanvasElement,
   scores: Record<NeuroKey, number>,
   max: number,
-  dominant: NeuroKey,
+  dominant: NeuroKey | null, // null — без выделения (тизер до оплаты)
   labels: string[],
   opts: { tooltip?: (v: number, m: number) => string; minimal?: boolean } = {}
 ) {
