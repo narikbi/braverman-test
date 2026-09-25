@@ -8,7 +8,7 @@ import { META, isAdmin } from './state'
 
 const NAV_ADMIN = [
   { hash: '#/', ic: '📊', label: 'Дашборд', match: 'dashboard' },
-  { hash: '#/attempts', ic: '👥', label: 'Прохождения', match: 'attempts' },
+  { hash: '#/attempts', ic: '👥', label: 'Прохождения', short: 'Клиенты', match: 'attempts' },
   { hash: '#/payments', ic: '💳', label: 'Оплаты', match: 'payments' },
   { hash: '#/trainers', ic: '🎓', label: 'Тренеры', match: 'trainers' },
   { hash: '#/health', ic: '🩺', label: 'Система', match: 'health' }
@@ -41,7 +41,7 @@ export function renderShell(active: string, title: string, sub = '', withRange =
         <div id="page"></div>
       </main>
       <nav class="bottom-nav">
-        ${nav.map(n => `<a href="${n.hash}" class="${isActive(n.match) ? 'active' : ''}"><span class="ic">${n.ic}</span>${n.label}</a>`).join('')}
+        ${nav.map(n => `<a href="${n.hash}" class="${isActive(n.match) ? 'active' : ''}"><span class="ic">${n.ic}</span><span class="lbl">${('short' in n && n.short) || n.label}</span></a>`).join('')}
       </nav>
     </div>`
   if (withRange) renderRange(app.querySelector('#range-slot')!)

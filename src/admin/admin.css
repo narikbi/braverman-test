@@ -62,10 +62,12 @@ h1, h2, h3 { margin: 0; letter-spacing: -0.01em; }
   .shell { grid-template-columns: 1fr; }
   .side { display: none; }
   .main { padding: 14px 14px calc(var(--a-nav-h) + 24px); }
-  .bottom-nav { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; bottom: 0; left: 0; right: 0; height: var(--a-nav-h); background: var(--a-surface); border-top: 1px solid var(--a-border); z-index: 20; padding-bottom: env(safe-area-inset-bottom); }
-  .bottom-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--a-text-3); font-size: 11px; font-weight: 600; }
+  .bottom-nav { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); position: fixed; bottom: 0; left: 0; right: 0; height: var(--a-nav-h); background: var(--a-surface); border-top: 1px solid var(--a-border); z-index: 20; padding-bottom: env(safe-area-inset-bottom); }
+  .bottom-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--a-text-3); font-size: 11px; font-weight: 600; min-width: 0; padding: 0 2px; white-space: nowrap; }
+  .bottom-nav a .lbl { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .bottom-nav a .ic { font-size: 19px; }
   .bottom-nav a.active { color: var(--a-accent); }
+  @media (max-width: 360px) { .bottom-nav a { font-size: 10px; } }
   .head h1 { font-size: 19px; }
   .head { gap: 10px; }
   /* поля и кнопки под палец: 16px в полях не даёт iOS зумить страницу при фокусе, высота ≥44px */
