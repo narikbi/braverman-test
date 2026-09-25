@@ -31,9 +31,17 @@ export function renderShell(active: string, title: string, sub = '', withRange =
         <div class="spacer"></div>
         ${META.trainer ? `<a href="/t/${esc(META.trainer.code)}" target="_blank" rel="noopener"><span class="ic">🔗</span>Моя ссылка</a>` : ''}
         <a href="/" target="_blank" rel="noopener"><span class="ic">↗</span>Открыть сайт</a>
-        <button class="logout" id="logout">Выйти</button>
+        <button class="logout" data-logout>Выйти</button>
       </aside>
       <main class="main">
+        <div class="mtop">
+          <div class="mtop-brand"><span class="dot">🧠</span><span>${brand}</span></div>
+          <div class="mtop-actions">
+            ${META.trainer ? `<a href="/t/${esc(META.trainer.code)}" target="_blank" rel="noopener">🔗 Ссылка</a>` : ''}
+            <a href="/" target="_blank" rel="noopener">↗ Сайт</a>
+            <button data-logout>Выйти</button>
+          </div>
+        </div>
         <div class="head">
           <div><h1>${esc(title)}</h1>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}</div>
           <div id="range-slot"></div>
@@ -45,9 +53,9 @@ export function renderShell(active: string, title: string, sub = '', withRange =
       </nav>
     </div>`
   if (withRange) renderRange(app.querySelector('#range-slot')!)
-  app.querySelector('#logout')!.addEventListener('click', async () => {
+  app.querySelectorAll('[data-logout]').forEach(b => b.addEventListener('click', async () => {
     await adminPost('logout').catch(() => {})
     navigate('#/login')
-  })
+  }))
   return app.querySelector('#page')!
 }
