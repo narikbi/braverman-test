@@ -79,3 +79,14 @@ export function scoreAttempt(answers: ArrayLike<number>) {
 export function isValidAnswers(a: unknown): a is number[] {
   return Array.isArray(a) && a.length === TOTAL_QUESTIONS && a.every((v) => v === 0 || v === 1)
 }
+
+/**
+ * «Заблокированность отделов»: совпали баллы в паре Дофамин–Ацетилхолин или ГАМК–Серотонин.
+ * Результат считается ненадёжным (человек отвлекался или устал) — клиенту нужна бесплатная пересдача.
+ */
+export const BLOCK_PAIRS: [NeuroKey, NeuroKey][] = [['dopamine', 'acetylcholine'], ['gaba', 'serotonin']]
+export function blockedPairs(s: Partial<Record<NeuroKey, number | null>>): [NeuroKey, NeuroKey][] {
+  return BLOCK_PAIRS.filter(([a, b]) => s[a] != null && s[a] === s[b])
+}
+/** Сколько раз подряд можно бесплатно пересдать (цепочка пересдач). */
+export const MAX_FREE_RETAKES = 3

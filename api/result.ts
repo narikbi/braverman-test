@@ -1,9 +1,9 @@
 // GET /api/result?r=<токен результата> — данные оплаченного результата.
 // Токен выдаётся только после оплаты (fulfill) или вручную из админки; бессрочный.
-import { getAttempt, logEvent, q, ipHash } from './_db.js'
-import { verifyResultToken } from './_access.js'
+import { getAttempt, logEvent, q, ipHash, retakeInfo } from './_db.js'
+import { verifyResultToken, makeResultToken } from './_access.js'
 import { queryOf } from './_lib.js'
-import { QUESTIONS_PER_BLOCK } from '../shared/scoring.js'
+import { QUESTIONS_PER_BLOCK, blockedPairs, MAX_FREE_RETAKES } from '../shared/scoring.js'
 
 type Req = { method?: string; url?: string; query?: Record<string, string | string[] | undefined>; headers: Record<string, string | string[] | undefined> }
 type Res = { status: (code: number) => { json: (o: object) => void }; setHeader: (k: string, v: string) => void }
@@ -28,12 +28,26 @@ export default async function handler(req: Req, res: Res) {
     await logEvent({ type: 'result_view', attemptId: id, sid, trainerCode: a.trainer_code, utm: a.utm, ua: (Array.isArray(ua) ? ua[0] : ua)?.slice(0, 200) ?? null, ipHash: ipHash(req.headers) })
   }
 
+  // «Заблокированность отделов» → предлагаем бесплатную пересдачу (или ссылку на уже пройденную)
+  const scores = { dopamine: a.dopamine!, acetylcholine: a.acetylcholine!, gaba: a.gaba!, serotonin: a.serotonin! }
+  const blocked = blockedPairs(scores)
+  let retake: { allowed: boolean; newResult: string | null } | null = null
+  if (blocked.length) {
+    const info = await retakeInfo(a.id)
+    retake = info.paidChild
+      ? { allowed: false, newResult: makeResultToken(info.paidChild) }
+      : { allowed: info.depth < MAX_FREE_RETAKES, newResult: null }
+  }
+
   return res.status(200).json({
     ok: true,
     id: a.id,
     name: a.name,
     lang: a.lang,
-    scores: { dopamine: a.dopamine, acetylcholine: a.acetylcholine, gaba: a.gaba, serotonin: a.serotonin },
+    scores,
+    blocked,
+    retake,
+    isRetake: a.retake_of != null,
     max: QUESTIONS_PER_BLOCK,
     dominant: a.dominant,
     lowest: a.lowest,

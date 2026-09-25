@@ -1,6 +1,6 @@
 // Экран 5: результат (только после оплаты). Данные — с сервера по токену ?r=.
 import { $, esc, showScreen, currentScreen } from '../dom'
-import { state, save, clearAll } from '../state'
+import { state, save, clearAll, resetForNewTest } from '../state'
 import { T, lang, onLangChange } from '../i18n'
 import { getResult, ApiError, type ResultPayload } from '../api'
 import { renderProfileChart, chartImage } from '../chart'
@@ -8,6 +8,7 @@ import { renderVideo, relabelVideo, stopVideo } from '../video'
 import { NEURO_ORDER, NEURO_COLOR, type NeuroKey } from '../../shared/scoring'
 import { showIntro } from './intro'
 import { authorRow } from '../author'
+import { startQuiz } from './quiz'
 import { renderCheckout } from './checkout'
 
 let last: ResultPayload | null = null
@@ -42,12 +43,17 @@ export function initResult() {
 
 const resultUrl = () => `${location.origin}/?r=${lastToken}`
 
-export async function openResult(r: string) {
-  lastToken = r
+/** Экран результата в состоянии загрузки (в т.ч. пока засчитывается бесплатная пересдача). */
+export function showResultLoading() {
   showScreen('result')
   $('resultBody').hidden = true
   $('resultLoading').hidden = false
   $('resultError').hidden = true
+}
+
+export async function openResult(r: string) {
+  lastToken = r
+  showResultLoading()
   try {
     const data = await getResult(r)
     last = data
@@ -81,6 +87,7 @@ function render(d: ResultPayload) {
   $('comboLine').innerHTML = pair
     .map(k => `<span class="combo-chip" style="background:${NEURO_COLOR[k]}1f"><span class="combo-dot" style="background:${NEURO_COLOR[k]}"></span>${esc(N[k].name)}</span>`)
     .join('<span class="combo-plus">+</span>')
+  renderRetake(d)
   $('videoAuthor').innerHTML = authorRow('author-mic.webp', T().ui.authorVideoRole)
   $('dominantTitle').textContent = dom.title
   $('dominantMeta').textContent = `${dom.lobe} · ${dom.func}`
@@ -106,4 +113,43 @@ function render(d: ResultPayload) {
   const url = resultUrl()
   $('resultLinkText').textContent = url
   $<HTMLAnchorElement>('shareWaBtn').href = `https://wa.me/?text=${encodeURIComponent(T().ui.resultLink.waText(url))}`
+}
+
+/** «Заблокированность отделов»: предупреждение сверху и бесплатная пересдача (или ссылка на уже пройденную). */
+function renderRetake(d: ResultPayload) {
+  const card = $('retakeCard')
+  const pairs = d.blocked ?? []
+  if (!pairs.length || !d.retake) { card.hidden = true; card.innerHTML = ''; return }
+  const u = T().ui.retake
+  const pairText = pairs
+    .map(([a, b]) => `${u.pairs[`${a}_${b}` as keyof typeof u.pairs]} (${d.scores[a]} = ${d.scores[b]})`)
+    .join(', ')
+  const action = d.retake.newResult
+    ? `<p class="retake-note">${esc(u.done)}</p><a class="btn btn-primary btn-block" href="/?r=${esc(d.retake.newResult)}" id="retakeOpenNew">${esc(u.openNew)}</a>`
+    : d.retake.allowed
+      ? `<button class="btn btn-primary btn-block" id="retakeBtn">${esc(u.btn)}</button><p class="retake-note">${esc(u.free)}</p>`
+      : `<p class="retake-note">${esc(u.limit)}</p>`
+  card.innerHTML = `
+    <div class="retake-title">⚠️ ${esc(u.title)}</div>
+    <p class="retake-text">${esc(u.text(pairText))}</p>
+    ${action}`
+  card.hidden = false
+  card.querySelector('#retakeBtn')?.addEventListener('click', () => {
+    stopVideo()
+    const name = last?.name || state.name
+    resetForNewTest(name)
+    state.retakeOf = lastToken
+    save()
+    last = null
+    history.replaceState(null, '', '/')
+    window.scrollTo(0, 0)
+    startQuiz()
+  })
+  card.querySelector<HTMLAnchorElement>('#retakeOpenNew')?.addEventListener('click', e => {
+    e.preventDefault()
+    const r = d.retake!.newResult!
+    history.replaceState(null, '', `/?r=${r}`)
+    window.scrollTo(0, 0)
+    openResult(r)
+  })
 }

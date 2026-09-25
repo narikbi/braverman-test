@@ -488,3 +488,9 @@ a.btn-block { display: block; }
   .teaser { margin-bottom: 14px; }
   .teaser-chart .chart-wrap { height: 100px; }
 }
+/* заблокированность отделов — предупреждение и бесплатная пересдача на странице результата */
+.retake-card { margin-bottom: 18px; border: 1.5px solid #F4C27A; background: #FFF9EF; }
+.retake-title { font-size: 19px; font-weight: 700; margin-bottom: 8px; }
+.retake-text { color: #5B5140; font-size: 15px; line-height: 1.55; }
+.retake-card .btn-block { margin-top: 16px; }
+.retake-note { margin-top: 10px; font-size: 13px; color: var(--muted); text-align: center; }

@@ -5,6 +5,7 @@ import { esc, fmtDateFull, fmtPhone, fmtMoney, fmtLang, fmtNeuro, fmtCombo, NEUR
 import { toast } from '../components/toast'
 import { badge } from './attempts'
 import { CONTENT, type Lang } from '../../content'
+import { fmtBlocked } from '../format'
 import { NEURO_ORDER, neuroAt, questionIndexAt, QUESTIONS_PER_BLOCK } from '../../../shared/scoring'
 
 type Attempt = {
@@ -13,7 +14,7 @@ type Attempt = {
   dominant: string | null; lowest: string | null; combo: string | null; paid_by: string | null
   utm: Record<string, string>; referrer: string | null; landing: string | null; trainer_code: string | null
   created_at: string; finished_at: string | null; checkout_at: string | null; paid_at: string | null
-  invoice_id: string | null; invoice_error?: string | null; test_amount: number | null
+  invoice_id: string | null; invoice_error?: string | null; test_amount: number | null; retake_of?: number | null
 }
 type Payment = { invoice_id: string; provider: string; amount: string | null; status: string; source: string | null; link_sent: boolean | null; created_at: string; paid_at: string | null }
 type Ev = { ts: string; type: string; step: number | null; props: Record<string, unknown> }
@@ -61,6 +62,8 @@ export async function openAttemptDrawer(id: number, onClose: () => void) {
 
     ${a.dominant ? `<div class="card" style="box-shadow:none"><div class="card-head"><h2>Результат</h2><span class="hint">${esc(fmtCombo(a.combo))}</span></div><div class="card-body">
       <div class="scores">${scores.map(s => `<div class="score-row"><span class="lbl">${esc(fmtNeuro(s.k))}</span><div class="bar"><i style="width:${((s.v ?? 0) / max) * 100}%;background:${NEURO_COLORS[s.k]}"></i></div><span class="num">${s.v ?? '—'} / ${max}</span></div>`).join('')}</div>
+      ${fmtBlocked(a) ? `<div class="warn-box">⚠️ <b>Заблокированность отделов</b>: ${esc(fmtBlocked(a))}. Клиенту на странице результата предложена бесплатная пересдача.</div>` : ''}
+      ${a.retake_of ? `<div class="muted" style="margin-top:8px;font-size:13px">🔁 Бесплатная пересдача прохождения <a href="#/attempts/${a.retake_of}">#${a.retake_of}</a></div>` : ''}
       <div class="kv" style="margin-top:12px"><span class="k">Доминанта</span><span class="v"><b>${esc(fmtNeuro(a.dominant))}</b></span><span class="k">Минимум</span><span class="v">${esc(fmtNeuro(a.lowest))}</span><span class="k">Видео</span><span class="v">${esc(fmtCombo(a.combo))}</span></div>
       <div id="access-box" style="margin-top:12px">
         ${d.resultLink ? `<div class="copy-box"><span>🔗</span><code>${esc(d.resultLink)}</code><button class="btn btn-sm" id="copy-link">Копировать</button></div>

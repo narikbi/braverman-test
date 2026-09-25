@@ -20,13 +20,13 @@ function post<T>(path: string, body: object): Promise<T> {
 }
 
 export type Teaser = { dominant: NeuroKey; lowest: NeuroKey; combo: VideoKey }
-export type AttemptRes = { id: number; token: string; offline?: boolean; teaser?: Teaser }
+export type AttemptRes = { id: number; token: string; offline?: boolean; teaser?: Teaser; r?: string }
 
 export function startAttempt(p: { name: string; lang: Lang }): Promise<AttemptRes> {
   return post('/api/attempt', { action: 'start', ...p, sid: getSid(), attr: getAttr() })
 }
 
-export function finishAttempt(p: { id: number; token: string; answers: number[]; name: string; lang: Lang }): Promise<AttemptRes> {
+export function finishAttempt(p: { id: number; token: string; answers: number[]; name: string; lang: Lang; retake?: string }): Promise<AttemptRes> {
   return post('/api/attempt', { action: 'finish', ...p, sid: getSid(), attr: getAttr() })
 }
 
@@ -45,6 +45,10 @@ export type ResultPayload = {
   id: number; name: string; lang: Lang
   scores: Record<NeuroKey, number>; max: number
   dominant: NeuroKey; lowest: NeuroKey; combo: VideoKey; paidAt: string
+  /** «заблокированность отделов» — пары с совпавшими баллами */
+  blocked: [NeuroKey, NeuroKey][]
+  retake: { allowed: boolean; newResult: string | null } | null
+  isRetake: boolean
 }
 export async function getResult(r: string): Promise<ResultPayload> {
   const res = await fetch(`/api/result?r=${encodeURIComponent(r)}&sid=${getSid()}`)

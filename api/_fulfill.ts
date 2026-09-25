@@ -6,6 +6,8 @@ import { makeResultToken } from './_access.js'
 import { sendWhatsApp, whatsappConfigured, fmtWaNumber } from './_whatsapp.js'
 import { resultLinkMessage } from './_wa-text.js'
 import { tgNotify, adminAttemptLink, SITE, sheetMirror } from './_lib.js'
+import { blockedPairs } from '../shared/scoring.js'
+import type { AttemptRow } from './_db.js'
 
 export function resultLink(attemptId: number): string {
   return `${SITE()}/?r=${makeResultToken(attemptId)}`
@@ -18,6 +20,12 @@ const RU_LOBE: Record<string, string> = { dopamine: 'Лобная доля', ace
 function comboLabel(dominant: string, combo: string | null | undefined): string {
   const partner = combo ? combo.split('-')[1] : ''
   return [dominant, partner].filter(Boolean).map(k => RU_NAME[k] || k).join(' + ')
+}
+
+/** «ГАМК = Серотонин (28)» — пары с совпавшими баллами (заблокированность отделов); '' если нет */
+export function blockedLabel(a: Pick<AttemptRow, 'dopamine' | 'acetylcholine' | 'gaba' | 'serotonin'>): string {
+  const s = { dopamine: a.dopamine, acetylcholine: a.acetylcholine, gaba: a.gaba, serotonin: a.serotonin }
+  return blockedPairs(s).map(([x, y]) => `${RU_NAME[x]} = ${RU_NAME[y]} (${s[x]})`).join(', ')
 }
 
 export async function fulfillPaidInvoice(i: {
@@ -65,6 +73,7 @@ export async function fulfillPaidInvoice(i: {
     `📱 <code>${phone || '—'}</code>`,
     amount ? `💵 ${amount} ₸` : '',
     full?.dominant ? `🧠 ${comboLabel(full.dominant, full.combo)}` : '',
+    full && blockedLabel(full) ? `⚠️ Заблокированность отделов: ${blockedLabel(full)} — клиенту предложена бесплатная пересдача` : '',
     trainer ? `🎓 Тренер: ${trainer.name} (${trainer.code})` : attempt.trainer_code ? `🎓 Код тренера: ${attempt.trainer_code} (неизвестен)` : '',
     `🧾 Счёт #${i.invoiceId} · ${i.source}`,
     `🔗 ${link}`,
@@ -86,4 +95,34 @@ export async function fulfillPaidInvoice(i: {
   }
 
   return { first: true, attemptId: attempt.id, r }
+}
+
+/**
+ * Бесплатная пересдача (после «заблокированности отделов»): попытка уже помечена оплаченной (grantRetake).
+ * Ссылка на новый результат — клиенту в WhatsApp, уведомление — в Telegram.
+ */
+export async function fulfillRetake(a: AttemptRow, originalId: number): Promise<void> {
+  await logEvent({ type: 'retake_granted', attemptId: a.id, sid: a.sid, utm: a.utm, trainerCode: a.trainer_code, props: { originalId } })
+  const link = resultLink(a.id)
+  let waSent = false
+  let waFrom = ''
+  if (a.phone && whatsappConfigured()) {
+    const w = await sendWhatsApp(a.phone, resultLinkMessage(a.name, link, a.lang))
+    waSent = w.sent
+    waFrom = w.from || ''
+  }
+  const again = blockedLabel(a)
+  await tgNotify([
+    '🔁 <b>ПЕРЕСДАЧА — тест Бравермана</b> (бесплатно)',
+    `👤 ${a.name || '—'}`,
+    `📱 <code>${a.phone || '—'}</code>`,
+    a.dominant ? `🧠 ${comboLabel(a.dominant, a.combo)}` : '',
+    again ? `⚠️ Снова заблокированность отделов: ${again}` : '✅ Отделы не заблокированы',
+    `↩️ Исходное прохождение #${originalId}`,
+    `🔗 ${link}`,
+    adminAttemptLink(a.id),
+    whatsappConfigured() && a.phone
+      ? (waSent ? `📲 Ссылка отправлена клиенту в WhatsApp ✅${waFrom ? `\n📤 С номера: <code>${fmtWaNumber(waFrom)}</code>` : ''}` : '📲 ❗️WhatsApp не доставлен — перешли ссылку клиенту')
+      : ''
+  ])
 }

@@ -7,6 +7,7 @@ import { track } from '../analytics'
 import { startAttempt, finishAttempt } from '../api'
 import { neuroAt, questionIndexAt, TOTAL_QUESTIONS, scoreAttempt } from '../../shared/scoring'
 import { renderCheckout } from './checkout'
+import { openResult, showResultLoading } from './result'
 
 const questionText = (i: number) => T().questions[neuroAt(i)][questionIndexAt(i)]
 
@@ -82,14 +83,25 @@ async function finish() {
   // тизер считаем локально сразу — сервер подтвердит и сохранит
   state.teaser = scoreAttempt(state.answers)
   save()
-  renderCheckout({ loading: true })
+  const retake = state.retakeOf || undefined
+  if (retake) showResultLoading()
+  else renderCheckout({ loading: true })
   try {
-    const r = await finishAttempt({ id: state.attemptId, token: state.attemptToken, answers: state.answers, name: state.name, lang })
+    const r = await finishAttempt({ id: state.attemptId, token: state.attemptToken, answers: state.answers, name: state.name, lang, retake })
     if (r.id) setAttempt(r.id, r.token)
     if (r.teaser) { state.teaser = r.teaser; save() }
+    if (r.r) {
+      // бесплатная пересдача засчитана — сразу к новому результату
+      finishing = false
+      state.retakeOf = ''
+      save()
+      history.replaceState(null, '', `/?r=${r.r}`)
+      return openResult(r.r)
+    }
   } catch (e) {
     console.error('finish_failed', e)
   }
+  if (retake) { state.retakeOf = ''; save() } // пересдачу не засчитали — обычная оплата
   finishing = false
   renderCheckout({})
 }

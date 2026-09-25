@@ -247,3 +247,6 @@ textarea.input { min-height: 84px; resize: vertical; }
 .ans-group summary { cursor: pointer; font-size: 13.5px; }
 .ans-group .answers { margin-top: 8px; }
 .answers .a.yes span:last-child { color: var(--a-green); font-weight: 700; }
+/* заблокированность отделов */
+.chip-warn { background: #FFF1DB; color: #9A5B00; border-color: #F4C27A; }
+.warn-box { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: #FFF9EF; border: 1px solid #F4C27A; font-size: 13.5px; color: #5B5140; }

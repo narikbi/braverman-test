@@ -37,6 +37,13 @@ export const bucketLabel = (t: string, bucket: 'hour' | 'day') => (bucket === 'h
 export const NEURO_LABELS: Record<string, string> = { dopamine: 'Дофамин', acetylcholine: 'Ацетилхолин', gaba: 'ГАМК', serotonin: 'Серотонин' }
 export const NEURO_COLORS: Record<string, string> = { dopamine: '#FF6B6B', acetylcholine: '#7C5CFC', gaba: '#2DB58A', serotonin: '#F4A93D' }
 export const fmtNeuro = (k: string | null | undefined) => (k ? NEURO_LABELS[k] || k : '—')
+/** «ГАМК = Серотонин (28)» — заблокированность отделов (совпали баллы в паре); '' если нет */
+export function fmtBlocked(a: object): string {
+  const s = a as Record<string, number | null | undefined>
+  return ([['dopamine', 'acetylcholine'], ['gaba', 'serotonin']] as const)
+    .filter(([x, y]) => s[x] != null && s[x] === s[y])
+    .map(([x, y]) => `${fmtNeuro(x)} = ${fmtNeuro(y)} (${s[x]})`).join(', ')
+}
 export const fmtCombo = (c: string | null | undefined) => (c ? c.split('-').map(fmtNeuro).join(' + ') : '—')
 
 export const EVENT_LABELS: Record<string, string> = {

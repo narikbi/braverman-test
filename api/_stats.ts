@@ -115,7 +115,7 @@ export async function trainersStats(from: Date, to: Date): Promise<{ rows: Train
       (SELECT count(DISTINCT e.sid) FROM events e WHERE e.trainer_code = t.code AND e.type = 'page_view' AND e.ts >= $1 AND e.ts < $2) AS visits,
       count(a.id) FILTER (WHERE a.created_at >= $1 AND a.created_at < $2)   AS started,
       count(a.id) FILTER (WHERE a.finished_at >= $1 AND a.finished_at < $2) AS finished,
-      count(a.id) FILTER (WHERE a.paid_at >= $1 AND a.paid_at < $2)         AS paid,
+      count(a.id) FILTER (WHERE a.paid_at >= $1 AND a.paid_at < $2 AND a.paid_by IS DISTINCT FROM 'retake') AS paid, -- бесплатные пересдачи не считаем
       COALESCE((SELECT sum(p.amount) FROM payments p JOIN attempts a2 ON a2.id = p.attempt_id
                 WHERE a2.trainer_code = t.code AND p.status = 'paid' AND p.paid_at >= $1 AND p.paid_at < $2), 0) AS revenue
     FROM trainers t LEFT JOIN attempts a ON a.trainer_code = t.code

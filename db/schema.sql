@@ -94,3 +94,8 @@ CREATE INDEX IF NOT EXISTS events_type_ts_idx    ON events (type, ts);
 CREATE INDEX IF NOT EXISTS events_sid_idx        ON events (sid);
 CREATE INDEX IF NOT EXISTS events_attempt_idx    ON events (attempt_id);
 CREATE INDEX IF NOT EXISTS events_trainer_ts_idx ON events (trainer_code, ts);
+
+-- Пересдача при «заблокированности отделов» (совпали баллы Дофамин = Ацетилхолин или ГАМК = Серотонин):
+-- бесплатная попытка ссылается на исходную оплаченную (paid_by = 'retake', строки в payments нет).
+ALTER TABLE attempts ADD COLUMN IF NOT EXISTS retake_of bigint REFERENCES attempts(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS attempts_retake_idx ON attempts (retake_of);

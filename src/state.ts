@@ -14,9 +14,11 @@ export type State = {
   phone: string
   invoiceId: string
   resultToken: string
+  /** токен результата, который пересдаём бесплатно (заблокированность отделов) */
+  retakeOf: string
 }
 
-const empty = (): State => ({ name: '', answers: [], index: 0, attemptId: 0, attemptToken: '', teaser: null, phone: '', invoiceId: '', resultToken: '' })
+const empty = (): State => ({ name: '', answers: [], index: 0, attemptId: 0, attemptToken: '', teaser: null, phone: '', invoiceId: '', resultToken: '', retakeOf: '' })
 
 function load(): State {
   try {

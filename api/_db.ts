@@ -113,6 +113,7 @@ export type AttemptRow = {
   invoice_error: string | null
   test_amount: number | null
   notes: string
+  retake_of: number | null
 }
 
 export type AttemptMeta = { sid?: string | null; name?: string; lang?: 'ru' | 'kk'; attr?: Attribution }
@@ -129,6 +130,35 @@ export async function createAttempt(m: AttemptMeta): Promise<{ id: number }> {
 export async function getAttempt(id: number): Promise<AttemptRow | null> {
   const rows = await q<AttemptRow>('get_attempt', 'SELECT * FROM attempts WHERE id = $1', [id])
   return rows[0] ?? null
+}
+
+/** Пересдача: глубина цепочки (сколько пересдач было до этой попытки) и уже оплаченная пересдача этой попытки. */
+export async function retakeInfo(id: number): Promise<{ depth: number; paidChild: number | null }> {
+  const [d, c] = await Promise.all([
+    q<{ depth: string }>('retake_depth', `
+      WITH RECURSIVE chain AS (
+        SELECT id, retake_of, 0 AS depth FROM attempts WHERE id = $1
+        UNION ALL
+        SELECT a.id, a.retake_of, chain.depth + 1 FROM attempts a JOIN chain ON a.id = chain.retake_of WHERE chain.depth < 10
+      ) SELECT max(depth) AS depth FROM chain`, [id]),
+    q<{ id: string }>('retake_child', `SELECT id FROM attempts WHERE retake_of = $1 AND status = 'paid' ORDER BY id DESC LIMIT 1`, [id])
+  ])
+  return { depth: Number(d[0]?.depth ?? 0), paidChild: c[0] ? Number(c[0].id) : null }
+}
+
+/** Бесплатная пересдача: попытка становится «оплаченной» без платежа, наследует телефон и атрибуцию исходной. */
+export async function grantRetake(id: number, originalId: number): Promise<AttemptRow | null> {
+  const rows = await q<AttemptRow>('grant_retake', `
+    UPDATE attempts a SET
+      retake_of = o.id, status = 'paid', paid_by = 'retake', paid_at = COALESCE(a.paid_at, now()),
+      phone = COALESCE(a.phone, o.phone),
+      trainer_code = COALESCE(a.trainer_code, o.trainer_code), trainer_id = COALESCE(a.trainer_id, o.trainer_id),
+      utm = CASE WHEN a.utm = '{}'::jsonb THEN o.utm ELSE a.utm END,
+      updated_at = now()
+    FROM attempts o
+    WHERE a.id = $1 AND o.id = $2 AND a.id <> o.id AND a.status <> 'paid'
+    RETURNING a.*`, [id, originalId])
+  return rows[0] ? { ...rows[0], id: Number(rows[0].id) } : null
 }
 
 /** Прогресс из beacon'ов quiz_step: только вверх. */

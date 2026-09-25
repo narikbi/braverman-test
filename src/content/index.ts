@@ -15,6 +15,16 @@ export type UiText = {
   authorRole: string
   authorVideoRole: string
   disclaimer: string
+  retake: {
+    title: string
+    text: (pairs: string) => string
+    free: string
+    btn: string
+    done: string
+    openNew: string
+    limit: string
+    pairs: { dopamine_acetylcholine: string; gaba_serotonin: string }
+  }
   factMinutes: string
   factQuestions: string
   factNeuro: string
