@@ -3,7 +3,7 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 
 // В dev Vite не исполняет /api (это Vercel-функции) — прокидываем запросы
 // в те же обработчики, чтобы тестировать всю цепочку локально.
-const DEV_ROUTES = ['attempt', 'checkout', 'invoice-status', 'kaspi-gw-webhook', 'result', 'recover', 'track', 'admin']
+const DEV_ROUTES = ['attempt', 'checkout', 'invoice-status', 'kaspi-gw-webhook', 'result', 'recover', 'track', 'admin', 'tg-webhook']
 
 function apiDevPlugin(): Plugin {
   return {

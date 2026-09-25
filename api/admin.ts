@@ -1,7 +1,7 @@
 // /api/admin?action=<...> — единый роутер админки и кабинета тренера (лимит функций Vercel).
 // GET: me, health, overview, funnel, timeline, sources, trainers-stats, attempts, attempt, payments, export, trainers, trainer
 // POST (JSON, заголовок X-Requested-With: admin): login, logout, attempt-update, attempt-grant, attempt-resend,
-//       trainer-create, trainer-update, trainer-password
+//       trainer-create, trainer-update, trainer-password, tg-setup
 // Роль trainer видит только свои попытки (scope по trainer_id / trainer_code); POST-действия ей запрещены.
 import { adminConfigured, checkCredentials, makeSession, sessionFromReq, sessionCookie, clearCookie, hashPassword, verifyPassword, type Session } from './_admin-auth.js'
 import {
@@ -12,89 +12,14 @@ import { sendWhatsApp, whatsappConfigured } from './_whatsapp.js'
 import { resultLinkMessage } from './_wa-text.js'
 import { resultLink } from './_fulfill.js'
 import { kpaConfigured } from './_kpa.js'
-import { tgConfigured, tgCall, SITE, PRICE, bodyOf, queryOf } from './_lib.js'
+import { tgConfigured, SITE, PRICE, bodyOf, queryOf } from './_lib.js'
+import { tgSetup, tgStatus } from './_tgbot.js'
+import { almatyDate, parseRange, funnelCounts, kpi, sourcesStats, trainersStats, FUNNEL_TYPES, FUNNEL_LABELS, type Scope } from './_stats.js'
 
 type Req = { method?: string; url?: string; headers: Record<string, string | string[] | undefined>; query?: Record<string, string | string[] | undefined>; body?: unknown }
 type Res = { status: (code: number) => { json: (o: object) => void }; setHeader: (k: string, v: string) => void }
 
-const TZ = '+05:00' // Asia/Almaty, без перехода на летнее время
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-
-// ── период ──
-type Range = { from: Date; to: Date; prevFrom: Date; prevTo: Date; bucket: 'hour' | 'day'; label: string }
-
-function almatyDate(d: Date): string {
-  return new Date(d.getTime() + 5 * 3600000).toISOString().slice(0, 10)
-}
-function parseRange(p: URLSearchParams): Range {
-  const preset = p.get('range') || '7d'
-  const today = almatyDate(new Date())
-  const day = (s: string, plus = 0) => new Date(new Date(`${s}T00:00:00${TZ}`).getTime() + plus * 86400000)
-  let from: Date
-  let to: Date
-  if (preset === 'custom' && /^\d{4}-\d{2}-\d{2}$/.test(p.get('from') || '') && /^\d{4}-\d{2}-\d{2}$/.test(p.get('to') || '')) {
-    from = day(p.get('from')!)
-    to = day(p.get('to')!, 1)
-  } else if (preset === 'today') {
-    from = day(today)
-    to = day(today, 1)
-  } else if (preset === 'all') {
-    from = new Date('2026-01-01T00:00:00Z')
-    to = day(today, 1)
-  } else {
-    const n = preset === '30d' ? 30 : 7
-    from = day(today, -(n - 1))
-    to = day(today, 1)
-  }
-  const len = to.getTime() - from.getTime()
-  return { from, to, prevFrom: new Date(from.getTime() - len), prevTo: from, bucket: len <= 2 * 86400000 ? 'hour' : 'day', label: preset }
-}
-
-// ── scope: админ видит всё, тренер — только своё ──
-type Scope = { trainerId: number | null; trainerCode: string | null }
-
-const FUNNEL_TYPES = ['page_view', 'quiz_start', 'quiz_finish', 'checkout_view', 'invoice_created', 'paid', 'result_view']
-const FUNNEL_LABELS: Record<string, string> = {
-  page_view: 'Открыли сайт', quiz_start: 'Начали тест', quiz_finish: 'Закончили тест', checkout_view: 'Экран оплаты',
-  invoice_created: 'Счёт выставлен', paid: 'Оплатили', result_view: 'Открыли результат'
-}
-
-async function funnelCounts(from: Date, to: Date, s: Scope): Promise<Record<string, number>> {
-  const rows = await q<{ type: string; n: string }>('funnel', `
-    SELECT type, count(DISTINCT COALESCE(sid, 'a' || attempt_id::text, id::text)) AS n
-    FROM events WHERE ts >= $1 AND ts < $2 AND type = ANY($3::text[]) AND ($4::text IS NULL OR trainer_code = $4)
-    GROUP BY type`, [from, to, FUNNEL_TYPES, s.trainerCode])
-  const out: Record<string, number> = {}
-  for (const t of FUNNEL_TYPES) out[t] = 0
-  for (const r of rows) out[r.type] = Number(r.n)
-  return out
-}
-
-// Попытки и оплаты тренера считаем по коду ссылки (trainer_code), а не по trainer_id:
-// код записывается всегда, даже если тренера зарегистрировали позже прихода клиента.
-async function kpi(from: Date, to: Date, s: Scope) {
-  const [f, rev, att] = await Promise.all([
-    funnelCounts(from, to, s),
-    q<{ revenue: string; paid: string }>('revenue', `
-      SELECT COALESCE(sum(p.amount), 0) AS revenue, count(*) AS paid FROM payments p
-      LEFT JOIN attempts a ON a.id = p.attempt_id
-      WHERE p.status = 'paid' AND p.paid_at >= $1 AND p.paid_at < $2 AND ($3::text IS NULL OR a.trainer_code = $3)`, [from, to, s.trainerCode]),
-    q<{ started: string; finished: string }>('kpi_attempts', `
-      SELECT count(*) FILTER (WHERE created_at >= $1 AND created_at < $2) AS started,
-             count(*) FILTER (WHERE finished_at >= $1 AND finished_at < $2) AS finished
-      FROM attempts WHERE ($3::text IS NULL OR trainer_code = $3)`, [from, to, s.trainerCode])
-  ])
-  const paid = Number(rev[0]?.paid ?? 0)
-  const started = Number(att[0]?.started ?? 0)
-  const finished = Number(att[0]?.finished ?? 0)
-  return {
-    visits: f.page_view, started, finished, checkouts: f.checkout_view, invoices: f.invoice_created,
-    paid, revenue: Number(rev[0]?.revenue ?? 0), results: f.result_view,
-    convVisitPaid: f.page_view ? +((paid / f.page_view) * 100).toFixed(2) : 0,
-    convFinishPaid: finished ? +((paid / finished) * 100).toFixed(1) : 0,
-    convStartFinish: started ? +((finished / started) * 100).toFixed(1) : 0
-  }
-}
 
 const ATTEMPT_SORT: Record<string, string> = { created_at: 'a.created_at', name: 'a.name', status: 'a.status', paid_at: 'a.paid_at', dominant: 'a.dominant', answered: 'a.answered' }
 
@@ -189,7 +114,7 @@ export default async function handler(req: Req, res: Res) {
       q<{ one: number }>('ping', 'SELECT 1 AS one'),
       gw ? fetchJson(`${gw}/health`) : null,
       wa ? fetchJson(`${wa}/health`) : null,
-      tgConfigured() ? tgCall('getMe', {}).then(() => true).catch(() => false) : null,
+      tgConfigured() ? tgStatus() : null,
       q<{ type: string; ts: string }>('last_events', `SELECT type, max(ts) AS ts FROM events WHERE type IN ('webhook_kpa','paid','invoice_created','quiz_start','page_view') GROUP BY type`)
     ])
     const lastMap: Record<string, string> = {}
@@ -201,7 +126,7 @@ export default async function handler(req: Req, res: Res) {
         db: { configured: dbConfigured(), ok: dbPing.length > 0, ms: Date.now() - t0 },
         kaspiGw: { configured: !!gw && kpaConfigured(), ok: !!kaspi?.ok, ms: kaspi?.ms ?? null, hasSession: !!kaspi?.data?.hasSession, cashier: kaspi?.data?.cashier ?? null, sessionSavedAt: kaspi?.data?.sessionSavedAt ?? null, url: gw ?? null },
         wa: { configured: whatsappConfigured(), ok: !!whatsapp?.ok, ms: whatsapp?.ms ?? null, connected: !!whatsapp?.data?.connected, url: wa ?? null, numbers: (whatsapp?.data?.numbers as unknown[] | undefined) ?? [] },
-        telegram: { configured: tgConfigured(), ok: tg === true }
+        telegram: { configured: tgConfigured(), ok: !!tg?.ok, bot: tg?.bot ?? null, commandsOn: !!tg?.commandsOn, webhookUrl: tg?.webhookUrl ?? null, lastError: tg?.lastError ?? null }
       },
       last: { ...lastMap, sessionExpired: sessionLost[0]?.ts ?? null },
       env: { siteUrl: SITE(), price: PRICE(), simulate: process.env.SIMULATE_PAYMENT === '1', testToken: !!process.env.TEST_TOKEN }
@@ -237,41 +162,13 @@ export default async function handler(req: Req, res: Res) {
   }
 
   if (action === 'sources') {
-    const rows = await q<Record<string, string>>('sources', `
-      SELECT COALESCE(utm->>'utm_source', CASE WHEN trainer_code IS NOT NULL THEN 'тренер:' || trainer_code ELSE '(прямые)' END) AS source,
-        COALESCE(utm->>'utm_medium', '') AS medium, COALESCE(utm->>'utm_campaign', '') AS campaign, COALESCE(utm->>'utm_content', '') AS content,
-        count(DISTINCT sid) FILTER (WHERE type = 'page_view')  AS views,
-        count(*) FILTER (WHERE type = 'quiz_start')            AS started,
-        count(*) FILTER (WHERE type = 'quiz_finish')           AS finished,
-        count(*) FILTER (WHERE type = 'invoice_created')       AS invoices,
-        count(*) FILTER (WHERE type = 'paid')                  AS paid,
-        COALESCE(sum((props->>'amount')::numeric) FILTER (WHERE type = 'paid' AND props->>'amount' ~ '^[0-9.]+$'), 0) AS revenue
-      FROM events WHERE ts >= $1 AND ts < $2 AND ($3::text IS NULL OR trainer_code = $3)
-      GROUP BY 1, 2, 3, 4 ORDER BY views DESC, paid DESC LIMIT 60`, [r.from, r.to, scope.trainerCode])
-    return res.status(200).json({ ok: true, rows: rows.map(x => ({ ...x, views: +x.views, started: +x.started, finished: +x.finished, invoices: +x.invoices, paid: +x.paid, revenue: +x.revenue })) })
+    return res.status(200).json({ ok: true, rows: await sourcesStats(r.from, r.to, scope.trainerCode) })
   }
 
   if (action === 'trainers-stats') {
     if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' })
-    const rows = await q<Record<string, string>>('trainers_stats', `
-      SELECT t.id, t.code, t.name, t.active,
-        (SELECT count(DISTINCT e.sid) FROM events e WHERE e.trainer_code = t.code AND e.type = 'page_view' AND e.ts >= $1 AND e.ts < $2) AS visits,
-        count(a.id) FILTER (WHERE a.created_at >= $1 AND a.created_at < $2)   AS started,
-        count(a.id) FILTER (WHERE a.finished_at >= $1 AND a.finished_at < $2) AS finished,
-        count(a.id) FILTER (WHERE a.paid_at >= $1 AND a.paid_at < $2)         AS paid,
-        COALESCE((SELECT sum(p.amount) FROM payments p JOIN attempts a2 ON a2.id = p.attempt_id
-                  WHERE a2.trainer_code = t.code AND p.status = 'paid' AND p.paid_at >= $1 AND p.paid_at < $2), 0) AS revenue
-      FROM trainers t LEFT JOIN attempts a ON a.trainer_code = t.code
-      GROUP BY t.id ORDER BY paid DESC, started DESC, t.name`, [r.from, r.to])
-    const unknown = await q<{ code: string; visits: string; started: string }>('unknown_codes', `
-      SELECT trainer_code AS code, count(DISTINCT sid) FILTER (WHERE type = 'page_view') AS visits, count(*) FILTER (WHERE type = 'quiz_start') AS started
-      FROM events WHERE ts >= $1 AND ts < $2 AND trainer_code IS NOT NULL AND trainer_code NOT IN (SELECT code FROM trainers)
-      GROUP BY 1 ORDER BY visits DESC LIMIT 20`, [r.from, r.to])
-    return res.status(200).json({
-      ok: true,
-      rows: rows.map(x => ({ id: +x.id, code: x.code, name: x.name, active: x.active as unknown as boolean, visits: +x.visits, started: +x.started, finished: +x.finished, paid: +x.paid, revenue: +x.revenue })),
-      unknown: unknown.map(u => ({ code: u.code, visits: +u.visits, started: +u.started }))
-    })
+    const { rows, unknown } = await trainersStats(r.from, r.to)
+    return res.status(200).json({ ok: true, rows, unknown })
   }
 
   if (action === 'attempts' || action === 'export') {
@@ -382,6 +279,19 @@ export default async function handler(req: Req, res: Res) {
     }
     await logEvent({ type: action === 'attempt-grant' ? 'access_granted' : 'link_resent', attemptId: id, props: { by: 'admin', waSent } })
     return res.status(200).json({ ok: true, link, waSent })
+  }
+
+  // Подключить команды Telegram-бота: вебхук на /api/tg-webhook + меню команд в группе TG_CHAT_ID
+  if (action === 'tg-setup') {
+    if (!isPost) return res.status(405).json({ ok: false })
+    if (!tgConfigured()) return res.status(400).json({ ok: false, error: 'tg_not_configured' })
+    try {
+      const r = await tgSetup()
+      await logEvent({ type: 'tg_setup', props: r })
+      return res.status(200).json({ ok: true, ...r })
+    } catch (e) {
+      return res.status(502).json({ ok: false, error: 'tg_setup_failed', detail: String((e as Error)?.message || e).slice(0, 300) })
+    }
   }
 
   if (action === 'trainer-create' || action === 'trainer-update') {

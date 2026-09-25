@@ -1,4 +1,5 @@
-import { adminGet } from '../api'
+import { adminGet, adminPost, ApiError } from '../api'
+import { toast } from '../components/toast'
 import { esc, fmtDateFull } from '../format'
 
 type Health = {
@@ -6,7 +7,7 @@ type Health = {
     db: { configured: boolean; ok: boolean; ms: number }
     kaspiGw: { configured: boolean; ok: boolean; ms: number | null; hasSession: boolean; cashier: string | null; sessionSavedAt: string | null; url: string | null }
     wa: { configured: boolean; ok: boolean; ms: number | null; connected: boolean; url: string | null; numbers: { number: string; connected: boolean; hasQr: boolean; sentToday: number; limit: number }[] }
-    telegram: { configured: boolean; ok: boolean }
+    telegram: { configured: boolean; ok: boolean; bot: string | null; commandsOn: boolean; webhookUrl: string | null; lastError: string | null }
   }
   last: Record<string, string | null>
   env: { siteUrl: string; price: number; simulate: boolean; testToken: boolean }
@@ -48,9 +49,13 @@ export async function renderHealth(page: HTMLElement) {
       ])}</div>
 
       <div class="card hcard"><div class="title">Telegram ${dot(!c.telegram.configured ? 'off' : c.telegram.ok ? 'ok' : 'bad')}</div>${kv([
-        ['Бот', !c.telegram.configured ? 'не настроен' : c.telegram.ok ? 'отвечает' : 'не отвечает'],
-        ['Уведомления', 'новые счета, оплаты, запросы ссылок, потеря сессии Kaspi']
-      ])}</div>
+        ['Бот', !c.telegram.configured ? 'не настроен' : c.telegram.ok ? (c.telegram.bot ? `@${esc(c.telegram.bot)} — отвечает` : 'отвечает') : 'не отвечает'],
+        ['Уведомления', 'новые счета, оплаты, запросы ссылок, потеря сессии Kaspi'],
+        ['Команды отчётов', !c.telegram.configured ? '—'
+          : c.telegram.commandsOn ? '<span style="color:var(--a-green);font-weight:600">подключены</span> — /report, /today, /week, /month, /all, /payments, /trainers'
+          : `не подключены${c.telegram.webhookUrl ? ` <span class="muted">(бот отправляет входящие на ${esc(new URL(c.telegram.webhookUrl).host)} — нужен отдельный бот)</span>` : ''}`],
+        ...(c.telegram.lastError ? [['Ошибка вебхука', `<span style="color:var(--a-red)">${esc(c.telegram.lastError)}</span>`] as [string, string]] : [])
+      ])}${c.telegram.configured && c.telegram.ok ? `<button class="btn btn-sm" id="tgSetup">${c.telegram.commandsOn ? 'Переподключить команды' : 'Подключить команды бота'}</button>` : ''}</div>
 
       <div class="card hcard"><div class="title">Настройки</div>${kv([
         ['Сайт', `<a href="${esc(h.env.siteUrl)}" target="_blank" rel="noopener">${esc(h.env.siteUrl)}</a>`],
@@ -60,4 +65,18 @@ export async function renderHealth(page: HTMLElement) {
       ])}<button class="btn btn-sm" id="refresh">Обновить</button></div>
     </div>`
   page.querySelector('#refresh')!.addEventListener('click', () => renderHealth(page))
+  page.querySelector<HTMLButtonElement>('#tgSetup')?.addEventListener('click', async e => {
+    const other = h.checks.telegram.webhookUrl && !h.checks.telegram.commandsOn ? new URL(h.checks.telegram.webhookUrl).host : ''
+    if (other && !confirm(`Входящие сообщения этого бота сейчас идут на ${other}. Если это бот другого проекта, подключение переключит их на braverman.kz и сломает там кнопки. Продолжить?`)) return
+    const btn = e.currentTarget as HTMLButtonElement
+    btn.disabled = true
+    try {
+      const r = await adminPost<{ bot: string; commands: number }>('tg-setup')
+      toast(`Команды подключены: @${r.bot}`)
+      renderHealth(page)
+    } catch (err) {
+      btn.disabled = false
+      toast(err instanceof ApiError ? `Не удалось: ${err.code}` : 'Не удалось подключить', 'err')
+    }
+  })
 }
