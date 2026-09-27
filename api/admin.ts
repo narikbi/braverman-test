@@ -1,7 +1,7 @@
 // /api/admin?action=<...> — единый роутер админки и кабинета тренера (лимит функций Vercel).
 // GET: me, health, overview, funnel, timeline, sources, trainers-stats, attempts, attempt, payments, export, trainers, trainer
 // POST (JSON, заголовок X-Requested-With: admin): login, logout, attempt-update, attempt-grant, attempt-resend,
-//       trainer-create, trainer-update, trainer-password, tg-setup, prepaid-create, prepaid-send
+//       trainer-create, trainer-update, trainer-password, tg-setup, prepaid-create, prepaid-grant, prepaid-send
 // Роль trainer видит только свои попытки (scope по trainer_id / trainer_code); POST-действия ей запрещены.
 import { adminConfigured, checkCredentials, makeSession, sessionFromReq, sessionCookie, clearCookie, hashPassword, verifyPassword, type Session } from './_admin-auth.js'
 import {
@@ -297,6 +297,12 @@ export default async function handler(req: Req, res: Res) {
     const lang = b.lang === 'ru' ? 'ru' : 'kk'
     const trainerCode = b.trainerCode && CODE_RE.test(String(b.trainerCode).trim().toLowerCase()) ? String(b.trainerCode).trim().toLowerCase() : null
     const name = String(b.name || '').trim()
+    // Уже прошёл тест, но не смог оплатить (нет Kaspi)? — предлагаем выдать готовый результат вместо нового теста
+    if (!(b as { force?: boolean }).force) {
+      const prev = await q<{ id: string; name: string; finished_at: string }>('prepaid_prev',
+        `SELECT id, name, finished_at FROM attempts WHERE phone = $1 AND dominant IS NOT NULL AND status <> 'paid' ORDER BY finished_at DESC NULLS LAST LIMIT 1`, [phone])
+      if (prev[0]) return res.status(200).json({ ok: true, existing: { id: Number(prev[0].id), name: prev[0].name, finished_at: prev[0].finished_at } })
+    }
     const a = await createPrepaidAttempt({ phone, name, lang, amount, method, trainerCode, note: String(b.note || '').trim() })
     const link = prepaidLink(a.id)
     let waSent = false
@@ -313,6 +319,37 @@ export default async function handler(req: Req, res: Res) {
       b.send ? (waSent ? '📲 Ссылка на тест отправлена клиенту в WhatsApp ✅' : '📲 ❗️WhatsApp не доставлен — перешли ссылку клиенту') : '📋 Ссылку нужно переслать клиенту'
     ])
     return res.status(200).json({ ok: true, id: a.id, link, waSent })
+  }
+
+  // Оплата вне сайта за уже пройденный тест: выдаём готовый результат (ссылку /?r=…)
+  if (action === 'prepaid-grant') {
+    if (!isPost) return res.status(405).json({ ok: false })
+    const b = bodyOf(req) as { id?: number; amount?: number; method?: string; send?: boolean }
+    const id = Number(b.id)
+    const before = id ? await getAttempt(id) : null
+    if (!before) return res.status(404).json({ ok: false, error: 'not_found' })
+    if (before.dominant == null) return res.status(400).json({ ok: false, error: 'not_finished' })
+    const amount = Math.round(Number(b.amount ?? PRICE()))
+    if (!Number.isFinite(amount) || amount < 0 || amount > 1_000_000) return res.status(400).json({ ok: false, error: 'amount' })
+    const method = PREPAID_METHODS.includes(String(b.method)) ? String(b.method) : 'Другое'
+    const a = before.status === 'paid' ? before : ((await grantManualPaid(id, amount, method)) ?? before)
+    const link = resultLink(id)
+    let waSent = false
+    if (b.send && a.phone && whatsappConfigured()) {
+      waSent = (await sendWhatsApp(a.phone, resultLinkMessage(a.name, link, a.lang))).sent
+      if (a.invoice_id) await setPaymentLinkSent(a.invoice_id, waSent)
+    }
+    await logEvent({ type: 'access_granted', attemptId: id, props: { by: 'admin', amount, method, waSent, offline: true } })
+    await tgNotify([
+      '🧾 <b>ОПЛАТА ВНЕ САЙТА — результат выдан</b>',
+      `👤 ${a.name || '—'}`,
+      `📱 <code>${a.phone || '—'}</code>`,
+      `💵 ${amount.toLocaleString('ru-RU')} ₸ · ${method}`,
+      `🔗 ${link}`,
+      adminAttemptLink(id),
+      b.send ? (waSent ? '📲 Ссылка на результат отправлена клиенту в WhatsApp ✅' : '📲 ❗️WhatsApp не доставлен — перешли ссылку клиенту') : '📋 Ссылку нужно переслать клиенту'
+    ])
+    return res.status(200).json({ ok: true, id, link, waSent, result: true })
   }
 
   if (action === 'prepaid-send') {

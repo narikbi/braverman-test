@@ -44,36 +44,72 @@ export function openPrepaidDialog(onDone: () => void) {
     $('#p-trainer').innerHTML = '<option value="">—</option>' + r.items.filter(t => t.active).map(t => `<option value="${esc(t.code)}">${esc(t.name)} (${esc(t.code)})</option>`).join('')
   }).catch(() => {})
 
+  type Body = { phone: string; name: string; method: string; amount: number; lang: string; trainerCode: string; note: string; send: boolean }
+  type Res = { id?: number; link?: string; waSent?: boolean; result?: boolean; existing?: { id: number; name: string; finished_at: string } }
+  const body = (): Body => ({
+    phone: $<HTMLInputElement>('#p-phone').value,
+    name: $<HTMLInputElement>('#p-name').value,
+    method: $<HTMLSelectElement>('#p-method').value,
+    amount: Number($<HTMLInputElement>('#p-amount').value),
+    lang: $<HTMLSelectElement>('#p-lang').value,
+    trainerCode: $<HTMLSelectElement>('#p-trainer').value,
+    note: $<HTMLTextAreaElement>('#p-note').value,
+    send: $<HTMLInputElement>('#p-send').checked
+  })
+  const fail = (e: unknown, btn?: HTMLButtonElement) => {
+    if (btn) btn.disabled = false
+    toast(e instanceof ApiError ? (ERR[e.code] || `Ошибка: ${e.code}`) : 'Не удалось выполнить', 'err')
+  }
+
+  // Готово: ссылка на тест (новое прохождение) или на результат (тест уже был пройден)
+  const showDone = (r: Res, b: Body) => {
+    const isResult = !!r.result
+    $('#p-body').innerHTML = `
+      <div style="font-weight:700;font-size:16px">${isResult ? 'Результат выдан ✅' : 'Ссылка на тест готова ✅'}</div>
+      <div class="muted" style="font-size:13px">${b.send ? (r.waSent ? `Ссылка ${isResult ? 'на результат' : 'на тест'} отправлена клиенту в WhatsApp.` : '<span style="color:var(--a-red)">WhatsApp не доставлен</span> — скопируйте ссылку и отправьте клиенту сами.') : 'Скопируйте ссылку и отправьте клиенту.'}${isResult ? '' : ' После теста результат откроется сразу и тоже придёт в WhatsApp.'}</div>
+      <div class="copy-box"><span>🔗</span><code>${esc(r.link!)}</code><button class="btn btn-sm" id="p-copy">Копировать</button></div>
+      <div class="row-actions">
+        <button class="btn btn-sm" id="p-copy-msg">Копировать с текстом</button>
+        <button class="btn btn-sm" id="p-open">Открыть карточку клиента</button>
+        <button class="btn btn-sm btn-primary" id="p-more">Добавить ещё</button>
+      </div>`
+    $('#p-copy').addEventListener('click', () => navigator.clipboard.writeText(r.link!).then(() => toast('Ссылка скопирована')))
+    $('#p-copy-msg').addEventListener('click', () => navigator.clipboard.writeText(isResult ? resultText(r.link!, b.lang) : inviteText(r.link!, b.lang)).then(() => toast('Текст со ссылкой скопирован')))
+    $('#p-open').addEventListener('click', () => { close(); navigate(`#/attempts/${r.id}`) })
+    $('#p-more').addEventListener('click', () => { close(); openPrepaidDialog(onDone) })
+    onDone()
+  }
+
+  // У номера уже есть пройденный, но не оплаченный тест — выдать его результат или всё же новый тест
+  const showChoice = (ex: NonNullable<Res['existing']>, b: Body) => {
+    const when = new Date(ex.finished_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    $('#p-body').innerHTML = `
+      <div style="font-weight:700;font-size:16px">Этот клиент уже прошёл тест</div>
+      <div class="warn-box" style="margin-top:0">📝 <b>${esc(ex.name || 'без имени')}</b> · прохождение #${ex.id} · ${esc(when)}<br />Тест пройден полностью, но не оплачен (например, не было Kaspi). Проходить заново не нужно — можно сразу выдать результат.</div>
+      <div class="row-actions" style="flex-direction:column;align-items:stretch">
+        <button class="btn btn-primary" id="p-grant">Выдать результат этого теста</button>
+        <button class="btn" id="p-force">Всё равно создать новую ссылку на тест</button>
+        <button class="btn btn-sm" id="p-see">Открыть карточку прохождения</button>
+      </div>`
+    $('#p-grant').addEventListener('click', async e => {
+      const btn = e.currentTarget as HTMLButtonElement; btn.disabled = true
+      try { showDone(await adminPost<Res>('prepaid-grant', { id: ex.id, amount: b.amount, method: b.method, send: b.send }), b) } catch (err2) { fail(err2, btn) }
+    })
+    $('#p-force').addEventListener('click', async e => {
+      const btn = e.currentTarget as HTMLButtonElement; btn.disabled = true
+      try { showDone(await adminPost<Res>('prepaid-create', { ...b, force: true }), b) } catch (err2) { fail(err2, btn) }
+    })
+    $('#p-see').addEventListener('click', () => { close(); navigate(`#/attempts/${ex.id}`) })
+  }
+
   $('#p-save').addEventListener('click', async () => {
     err.style.display = 'none'
     const btn = $<HTMLButtonElement>('#p-save'); btn.disabled = true
+    const b = body()
     try {
-      const r = await adminPost<{ id: number; link: string; waSent: boolean }>('prepaid-create', {
-        phone: $<HTMLInputElement>('#p-phone').value,
-        name: $<HTMLInputElement>('#p-name').value,
-        method: $<HTMLSelectElement>('#p-method').value,
-        amount: Number($<HTMLInputElement>('#p-amount').value),
-        lang: $<HTMLSelectElement>('#p-lang').value,
-        trainerCode: $<HTMLSelectElement>('#p-trainer').value,
-        note: $<HTMLTextAreaElement>('#p-note').value,
-        send: $<HTMLInputElement>('#p-send').checked
-      })
-      const sendWanted = $<HTMLInputElement>('#p-send').checked
-      $('#p-body').innerHTML = `
-        <div style="font-weight:700;font-size:16px">Ссылка на тест готова ✅</div>
-        <div class="muted" style="font-size:13px">${sendWanted ? (r.waSent ? 'Ссылка отправлена клиенту в WhatsApp.' : '<span style="color:var(--a-red)">WhatsApp не доставлен</span> — скопируйте ссылку и отправьте клиенту сами.') : 'Скопируйте ссылку и отправьте клиенту.'} После теста результат откроется сразу и тоже придёт в WhatsApp.</div>
-        <div class="copy-box"><span>🔗</span><code>${esc(r.link)}</code><button class="btn btn-sm" id="p-copy">Копировать</button></div>
-        <div class="row-actions">
-          <button class="btn btn-sm" id="p-copy-msg">Копировать с текстом</button>
-          <button class="btn btn-sm" id="p-open">Открыть карточку клиента</button>
-          <button class="btn btn-sm btn-primary" id="p-more">Добавить ещё</button>
-        </div>`
-      const lang = $<HTMLSelectElement>('#p-lang')?.value
-      $('#p-copy').addEventListener('click', () => navigator.clipboard.writeText(r.link).then(() => toast('Ссылка скопирована')))
-      $('#p-copy-msg').addEventListener('click', () => navigator.clipboard.writeText(inviteText(r.link, lang)).then(() => toast('Текст со ссылкой скопирован')))
-      $('#p-open').addEventListener('click', () => { close(); navigate(`#/attempts/${r.id}`) })
-      $('#p-more').addEventListener('click', () => { close(); openPrepaidDialog(onDone) })
-      onDone()
+      const r = await adminPost<Res>('prepaid-create', b)
+      if (r.existing) return showChoice(r.existing, b)
+      showDone(r, b)
     } catch (e) {
       btn.disabled = false
       err.textContent = e instanceof ApiError ? (ERR[e.code] || `Ошибка: ${e.code}`) : 'Не удалось создать'
@@ -86,5 +122,12 @@ export function openPrepaidDialog(onDone: () => void) {
 export function inviteText(link: string, lang = 'kk'): string {
   const kk = `Сәлеметсіз бе! Тұлғаның биохимиялық типін анықтау тестінің төлемі қабылданды. Тестті осы сілтеме арқылы өтіңіз:\n${link}\nТест 20 минуттай алады, соңында нәтиже мен видео-талдау бірден ашылады.`
   const ru = `Здравствуйте! Оплата теста на биохимический тип личности получена. Пройдите тест по ссылке:\n${link}\nТест займёт около 20 минут, в конце сразу откроются результат и видео-разбор.`
+  return lang === 'ru' ? ru : kk
+}
+
+/** Текст со ссылкой на результат (тест уже пройден, оплатил вне сайта). */
+export function resultText(link: string, lang = 'kk'): string {
+  const kk = `Сәлеметсіз бе! Төлеміңіз қабылданды, рахмет. Тұлғаның биохимиялық типін анықтау тестінің нәтижесі осы сілтемеде:\n${link}\nСілтемені сақтап қойыңыз — нәтиже мен видео-талдау кез келген уақытта ашылады.`
+  const ru = `Здравствуйте! Оплата получена, спасибо. Результат теста на биохимический тип личности по ссылке:\n${link}\nСохраните ссылку — результат и видео-разбор откроются в любое время.`
   return lang === 'ru' ? ru : kk
 }

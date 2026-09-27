@@ -274,16 +274,16 @@ export async function markPaid(i: { invoiceId: string; source: 'webhook' | 'poll
 }
 
 /** Ручная выдача из админки (оплата вне сайта): попытка → оплачено, запись оплаты, событие. */
-export async function grantManualPaid(attemptId: number, amount = Number(process.env.PRICE_KZT || 5000)): Promise<AttemptRow | null> {
+export async function grantManualPaid(attemptId: number, amount = Number(process.env.PRICE_KZT || 5000), method: string | null = null): Promise<AttemptRow | null> {
   const rows = await q<AttemptRow>('grant_attempt',
     `UPDATE attempts SET status = 'paid', paid_by = 'admin', paid_at = COALESCE(paid_at, now()), updated_at = now() WHERE id = $1 RETURNING *`, [attemptId])
   const a = rows[0]
   if (!a) return null
   await q('grant_payment',
-    `INSERT INTO payments (invoice_id, provider, attempt_id, phone, amount, status, source, paid_at)
-     VALUES ($1, 'manual', $2, $3, $4, 'paid', 'admin', now()) ON CONFLICT (invoice_id) DO NOTHING`,
-    [`manual-${a.id}`, a.id, a.phone ?? '', amount])
-  await logEvent({ type: 'paid', attemptId: a.id, sid: a.sid, utm: a.utm, trainerCode: a.trainer_code, props: { amount, provider: 'manual', source: 'admin' } })
+    `INSERT INTO payments (invoice_id, provider, attempt_id, phone, amount, status, source, method, paid_at)
+     VALUES ($1, 'manual', $2, $3, $4, 'paid', 'admin', $5, now()) ON CONFLICT (invoice_id) DO NOTHING`,
+    [`manual-${a.id}`, a.id, a.phone ?? '', amount, method])
+  await logEvent({ type: 'paid', attemptId: a.id, sid: a.sid, utm: a.utm, trainerCode: a.trainer_code, props: { amount, provider: 'manual', source: 'admin', ...(method ? { method } : {}) } })
   return a
 }
 
