@@ -6,6 +6,7 @@ import { toast } from '../components/toast'
 import { badge } from './attempts'
 import { CONTENT, type Lang } from '../../content'
 import { fmtBlocked } from '../format'
+import { inviteText } from './prepaid-dialog'
 import { NEURO_ORDER, neuroAt, questionIndexAt, QUESTIONS_PER_BLOCK } from '../../../shared/scoring'
 
 type Attempt = {
@@ -18,7 +19,7 @@ type Attempt = {
 }
 type Payment = { invoice_id: string; provider: string; amount: string | null; status: string; source: string | null; link_sent: boolean | null; created_at: string; paid_at: string | null }
 type Ev = { ts: string; type: string; step: number | null; props: Record<string, unknown> }
-type Detail = { attempt: Attempt; payments: Payment[]; events: Ev[]; trainer: { id: number; name: string; code: string } | null; resultLink: string | null }
+type Detail = { attempt: Attempt; payments: Payment[]; events: Ev[]; trainer: { id: number; name: string; code: string } | null; resultLink: string | null; prepaidLink?: string | null }
 
 export async function openAttemptDrawer(id: number, onClose: () => void) {
   const bg = document.createElement('div'); bg.className = 'drawer-bg'
@@ -43,7 +44,7 @@ export async function openAttemptDrawer(id: number, onClose: () => void) {
   body.innerHTML = `
     <div>
       <div style="font-size:20px;font-weight:800">${esc(a.name || 'Без имени')}</div>
-      <div class="row-actions" style="margin-top:6px">${badge(a.status)}${a.status === 'started' ? `<span class="chip">${a.answered}/200</span>` : ''}${a.test_amount ? '<span class="chip">тестовый счёт</span>' : ''}${a.paid_by === 'admin' ? '<span class="chip">выдано вручную</span>' : ''}
+      <div class="row-actions" style="margin-top:6px">${badge(a.status)}${a.status === 'started' ? `<span class="chip">${a.answered}/200</span>` : ''}${a.test_amount ? '<span class="chip">тестовый счёт</span>' : ''}${a.paid_by === 'admin' ? '<span class="chip">выдано вручную</span>' : ''}${a.paid_by === 'prepaid' ? '<span class="chip">оплата вне сайта</span>' : ''}${a.paid_by === 'retake' ? '<span class="chip">пересдача</span>' : ''}
         ${digits && !a.phone!.includes('•') ? `<a class="btn btn-sm" href="https://wa.me/${digits}" target="_blank" rel="noopener">WhatsApp</a><a class="btn btn-sm" href="tel:+${digits}">Позвонить</a>` : ''}</div>
     </div>
     <div class="kv">
@@ -59,6 +60,12 @@ export async function openAttemptDrawer(id: number, onClose: () => void) {
       ${isAdmin() ? `<span class="k">Счёт</span><span class="v">${a.invoice_id ? `Kaspi #${esc(a.invoice_id)}` : (a.invoice_error ? `<span style="color:var(--a-red)">не выставлен: ${esc(a.invoice_error.slice(0, 80))}</span>` : '—')}</span>` : ''}
       <span class="k">Оплата</span><span class="v">${a.paid_at ? `<span style="color:var(--a-green)">${fmtDateFull(a.paid_at)}</span>` : '—'}</span>
     </div>
+
+    ${d.prepaidLink ? `<div class="card" style="box-shadow:none"><div class="card-head"><h2>Ссылка на тест</h2><span class="hint">оплата вне сайта · ждёт прохождения</span></div><div class="card-body">
+      <div class="muted" style="font-size:13px;margin-bottom:10px">Клиент проходит тест по этой ссылке — оплата не нужна, результат откроется сразу и придёт в WhatsApp.</div>
+      <div class="copy-box"><span>🔗</span><code>${esc(d.prepaidLink)}</code><button class="btn btn-sm" id="copy-prepaid">Копировать</button></div>
+      <div class="row-actions" style="margin-top:8px"><button class="btn btn-sm" id="copy-prepaid-msg">Копировать с текстом</button>${a.phone ? '<button class="btn btn-sm" id="send-prepaid">Отправить в WhatsApp</button>' : ''}</div>
+    </div></div>` : ''}
 
     ${a.dominant ? `<div class="card" style="box-shadow:none"><div class="card-head"><h2>Результат</h2><span class="hint">${esc(fmtCombo(a.combo))}</span></div><div class="card-body">
       <div class="scores">${scores.map(s => `<div class="score-row"><span class="lbl">${esc(fmtNeuro(s.k))}</span><div class="bar"><i style="width:${((s.v ?? 0) / max) * 100}%;background:${NEURO_COLORS[s.k]}"></i></div><span class="num">${s.v ?? '—'} / ${max}</span></div>`).join('')}</div>
@@ -90,6 +97,14 @@ export async function openAttemptDrawer(id: number, onClose: () => void) {
     </div></div></div>`
 
   body.querySelector('#copy-link')?.addEventListener('click', () => { navigator.clipboard.writeText(d.resultLink!).then(() => toast('Ссылка скопирована')) })
+  body.querySelector('#copy-prepaid')?.addEventListener('click', () => { navigator.clipboard.writeText(d.prepaidLink!).then(() => toast('Ссылка на тест скопирована')) })
+  body.querySelector('#copy-prepaid-msg')?.addEventListener('click', () => { navigator.clipboard.writeText(inviteText(d.prepaidLink!, a.lang)).then(() => toast('Текст со ссылкой скопирован')) })
+  body.querySelector<HTMLButtonElement>('#send-prepaid')?.addEventListener('click', async e => {
+    const btn = e.currentTarget as HTMLButtonElement; btn.disabled = true
+    try { const r = await adminPost<{ waSent: boolean }>('prepaid-send', { id: a.id }); toast(r.waSent ? 'Ссылка отправлена в WhatsApp' : 'WhatsApp не доставлен — скопируйте ссылку', r.waSent ? 'ok' : 'err') }
+    catch { toast('Не удалось отправить', 'err') }
+    btn.disabled = false
+  })
   const grant = async (action: 'attempt-grant' | 'attempt-resend', send: boolean) => {
     if (action === 'attempt-grant' && !confirm(send ? 'Выдать результат и отправить ссылку в WhatsApp?' : 'Выдать результат (без отправки)?')) return
     try {

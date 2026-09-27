@@ -2,6 +2,7 @@
 // Токен: base64url("<вид>|<id попытки>|<ts выдачи>") + "." + HMAC(payload).
 //  a — токен попытки: выдаётся при старте теста, подтверждает право менять/оплачивать попытку.
 //  r — токен результата: выдаётся только после оплаты; ссылка /?r=<токен> бессрочная.
+//  p — ссылка на прохождение для оплативших вне сайта (Halyk, наличные…): /?p=<токен>, тест без экрана оплаты.
 // Виды разделены в payload, поэтому токен попытки нельзя подсунуть вместо токена результата.
 import crypto from 'node:crypto'
 
@@ -15,7 +16,7 @@ export function accessConfigured(): boolean {
   return !!secret()
 }
 
-type Kind = 'a' | 'r'
+type Kind = 'a' | 'r' | 'p'
 
 function sign(kind: Kind, id: number): string {
   const payload = Buffer.from(`${kind}|${id}|${Date.now()}`, 'utf8').toString('base64url')
@@ -65,3 +66,7 @@ export function verifyOtp(phone: string, code: string): boolean {
   const clean = String(code).replace(/\D/g, '')
   return clean.length === 6 && (clean === otpForSlot(digits, slot) || clean === otpForSlot(digits, slot - 1))
 }
+
+export const makePrepaidToken = (attemptId: number) => sign('p', attemptId)
+/** id предоплаченной попытки из ссылки /?p=… или null. */
+export const verifyPrepaidToken = (token: string | undefined | null) => verify('p', token)

@@ -1,18 +1,19 @@
 // /api/admin?action=<...> — единый роутер админки и кабинета тренера (лимит функций Vercel).
 // GET: me, health, overview, funnel, timeline, sources, trainers-stats, attempts, attempt, payments, export, trainers, trainer
 // POST (JSON, заголовок X-Requested-With: admin): login, logout, attempt-update, attempt-grant, attempt-resend,
-//       trainer-create, trainer-update, trainer-password, tg-setup
+//       trainer-create, trainer-update, trainer-password, tg-setup, prepaid-create, prepaid-send
 // Роль trainer видит только свои попытки (scope по trainer_id / trainer_code); POST-действия ей запрещены.
 import { adminConfigured, checkCredentials, makeSession, sessionFromReq, sessionCookie, clearCookie, hashPassword, verifyPassword, type Session } from './_admin-auth.js'
 import {
   dbConfigured, q, ipHash, logEvent, ATTEMPT_STATUSES, type AttemptRow, getAttempt, setAttemptNotes, grantManualPaid, setPaymentLinkSent,
-  listTrainers, getTrainer, createTrainer, updateTrainer, setTrainerPassword, findTrainerByLogin, touchTrainerLogin
+  listTrainers, getTrainer, createTrainer, updateTrainer, setTrainerPassword, findTrainerByLogin, touchTrainerLogin, createPrepaidAttempt
 } from './_db.js'
 import { sendWhatsApp, whatsappConfigured } from './_whatsapp.js'
-import { resultLinkMessage } from './_wa-text.js'
+import { resultLinkMessage, prepaidLinkMessage } from './_wa-text.js'
 import { resultLink } from './_fulfill.js'
 import { kpaConfigured } from './_kpa.js'
-import { tgConfigured, SITE, PRICE, bodyOf, queryOf } from './_lib.js'
+import { tgConfigured, tgNotify, SITE, PRICE, bodyOf, queryOf, normalizePhone, adminAttemptLink } from './_lib.js'
+import { makePrepaidToken } from './_access.js'
 import { tgSetup, tgStatus } from './_tgbot.js'
 import { almatyDate, parseRange, funnelCounts, kpi, sourcesStats, trainersStats, FUNNEL_TYPES, FUNNEL_LABELS, type Scope } from './_stats.js'
 
@@ -20,6 +21,9 @@ type Req = { method?: string; url?: string; headers: Record<string, string | str
 type Res = { status: (code: number) => { json: (o: object) => void }; setHeader: (k: string, v: string) => void }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+const PREPAID_METHODS = ['Halyk', 'Kaspi перевод', 'Наличные', 'Другое']
+const prepaidLink = (id: number) => `${SITE()}/?p=${makePrepaidToken(id)}`
 
 const ATTEMPT_SORT: Record<string, string> = { created_at: 'a.created_at', name: 'a.name', status: 'a.status', paid_at: 'a.paid_at', dominant: 'a.dominant', answered: 'a.answered' }
 
@@ -211,13 +215,13 @@ export default async function handler(req: Req, res: Res) {
     const a = await getAttempt(id)
     if (!a || (!isAdmin && a.trainer_code !== scope.trainerCode)) return res.status(404).json({ ok: false, error: 'not_found' })
     const [payments, events, trainer] = await Promise.all([
-      isAdmin ? q('attempt_payments', 'SELECT invoice_id, provider, amount, status, source, link_sent, created_at, paid_at FROM payments WHERE attempt_id = $1 ORDER BY created_at DESC', [id]) : Promise.resolve([]),
+      isAdmin ? q('attempt_payments', 'SELECT invoice_id, provider, method, amount, status, source, link_sent, created_at, paid_at FROM payments WHERE attempt_id = $1 ORDER BY created_at DESC', [id]) : Promise.resolve([]),
       q('attempt_events', `SELECT ts, type, step, props FROM events WHERE attempt_id = $1 OR ($2::text IS NOT NULL AND sid = $2 AND ts >= $3::timestamptz - interval '1 hour' AND ts <= COALESCE($4::timestamptz, now()) + interval '1 day') ORDER BY ts DESC LIMIT 300`, [id, a.sid, a.created_at, a.paid_at]),
       a.trainer_id ? getTrainer(a.trainer_id) : Promise.resolve(null)
     ])
     const attempt: Partial<AttemptRow> = { ...a }
     if (!isAdmin) { delete attempt.notes; delete attempt.invoice_error; delete attempt.invoice_ref; if (!seesPhone(session)) attempt.phone = maskPhone(a.phone) }
-    return res.status(200).json({ ok: true, attempt, payments, events, trainer: trainer ? { id: trainer.id, name: trainer.name, code: trainer.code } : null, resultLink: a.status === 'paid' ? resultLink(a.id) : null })
+    return res.status(200).json({ ok: true, attempt, payments, events, trainer: trainer ? { id: trainer.id, name: trainer.name, code: trainer.code } : null, resultLink: a.status === 'paid' && a.dominant != null ? resultLink(a.id) : null, prepaidLink: isAdmin && a.paid_by === 'prepaid' && a.dominant == null ? prepaidLink(a.id) : null })
   }
 
   if (action === 'payments') {
@@ -226,7 +230,7 @@ export default async function handler(req: Req, res: Res) {
     const limit = Math.min(100, Math.max(1, Number(p.get('limit') || 25)))
     const page = Math.max(1, Number(p.get('page') || 1))
     const rows = await q<Record<string, unknown> & { total: string }>('payments', `
-      SELECT p.id, p.invoice_id, p.provider, p.phone, p.amount, p.status, p.source, p.link_sent, p.created_at, p.paid_at, p.attempt_id,
+      SELECT p.id, p.invoice_id, p.provider, p.method, p.phone, p.amount, p.status, p.source, p.link_sent, p.created_at, p.paid_at, p.attempt_id,
              a.name AS attempt_name, count(*) OVER () AS total
       FROM payments p LEFT JOIN attempts a ON a.id = p.attempt_id
       WHERE p.created_at >= $1 AND p.created_at < $2 AND ($3::text IS NULL OR p.status = $3)
@@ -279,6 +283,48 @@ export default async function handler(req: Req, res: Res) {
     }
     await logEvent({ type: action === 'attempt-grant' ? 'access_granted' : 'link_resent', attemptId: id, props: { by: 'admin', waSent } })
     return res.status(200).json({ ok: true, link, waSent })
+  }
+
+  // Оплата вне сайта (через менеджера): попытка создаётся уже оплаченной, клиенту — ссылка на тест /?p=…
+  if (action === 'prepaid-create') {
+    if (!isPost) return res.status(405).json({ ok: false })
+    const b = bodyOf(req) as { phone?: string; name?: string; lang?: string; amount?: number; method?: string; trainerCode?: string; note?: string; send?: boolean }
+    const phone = normalizePhone(b.phone)
+    if (!phone) return res.status(400).json({ ok: false, error: 'phone' })
+    const amount = Math.round(Number(b.amount ?? PRICE()))
+    if (!Number.isFinite(amount) || amount < 0 || amount > 1_000_000) return res.status(400).json({ ok: false, error: 'amount' })
+    const method = PREPAID_METHODS.includes(String(b.method)) ? String(b.method) : 'Другое'
+    const lang = b.lang === 'ru' ? 'ru' : 'kk'
+    const trainerCode = b.trainerCode && CODE_RE.test(String(b.trainerCode).trim().toLowerCase()) ? String(b.trainerCode).trim().toLowerCase() : null
+    const name = String(b.name || '').trim()
+    const a = await createPrepaidAttempt({ phone, name, lang, amount, method, trainerCode, note: String(b.note || '').trim() })
+    const link = prepaidLink(a.id)
+    let waSent = false
+    if (b.send && whatsappConfigured()) waSent = (await sendWhatsApp(phone, prepaidLinkMessage(name, link, lang))).sent
+    await logEvent({ type: 'prepaid_created', attemptId: a.id, trainerCode, props: { amount, method, waSent } })
+    await tgNotify([
+      '🧾 <b>ОПЛАТА ВНЕ САЙТА — тест Бравермана</b>',
+      `👤 ${name || '—'}`,
+      `📱 <code>${phone}</code>`,
+      `💵 ${amount.toLocaleString('ru-RU')} ₸ · ${method}`,
+      trainerCode ? `🎓 Тренер: ${trainerCode}` : '',
+      `🔗 Ссылка на тест: ${link}`,
+      adminAttemptLink(a.id),
+      b.send ? (waSent ? '📲 Ссылка на тест отправлена клиенту в WhatsApp ✅' : '📲 ❗️WhatsApp не доставлен — перешли ссылку клиенту') : '📋 Ссылку нужно переслать клиенту'
+    ])
+    return res.status(200).json({ ok: true, id: a.id, link, waSent })
+  }
+
+  if (action === 'prepaid-send') {
+    if (!isPost) return res.status(405).json({ ok: false })
+    const id = Number((bodyOf(req) as { id?: number }).id)
+    const a = id ? await getAttempt(id) : null
+    if (!a || a.paid_by !== 'prepaid') return res.status(404).json({ ok: false, error: 'not_found' })
+    if (a.dominant != null) return res.status(400).json({ ok: false, error: 'done' })
+    if (!a.phone) return res.status(400).json({ ok: false, error: 'phone' })
+    const waSent = (await sendWhatsApp(a.phone, prepaidLinkMessage(a.name, prepaidLink(a.id), a.lang))).sent
+    await logEvent({ type: 'prepaid_link_sent', attemptId: a.id, props: { waSent } })
+    return res.status(200).json({ ok: true, waSent })
   }
 
   // Подключить команды Telegram-бота: вебхук на /api/tg-webhook + меню команд в группе TG_CHAT_ID

@@ -1,9 +1,11 @@
 // Экран 1: имя + язык → старт теста.
 import { $, showScreen, currentScreen } from '../dom'
-import { setNameExample } from '../i18n'
+import { setNameExample, setLang } from '../i18n'
 import { EXAMPLE_NAMES } from '../content'
-import { state, resetForNewTest } from '../state'
-import { startQuiz } from './quiz'
+import { state, save, resetForNewTest, setAttempt, hasProgress } from '../state'
+import { openPrepaid } from '../api'
+import { startQuiz, resumeQuiz } from './quiz'
+import { openResult } from './result'
 import { renderRecover } from './recover'
 
 export function initIntro() {
@@ -15,7 +17,15 @@ export function initIntro() {
       return
     }
     $('nameError').hidden = true
-    resetForNewTest(name)
+    if (state.prepaid && state.attemptId) {
+      // оплата вне сайта: попытка уже создана и оплачена — сохраняем её, сбрасываем только ответы
+      state.name = name
+      state.answers = []
+      state.index = 0
+      save()
+    } else {
+      resetForNewTest(name)
+    }
     startQuiz()
   }
   $('startBtn').addEventListener('click', start)
@@ -68,5 +78,30 @@ function animateNameExamples() {
 
 export function showIntro() {
   if (state.name) $<HTMLInputElement>('nameInput').value = state.name
+  $('prepaidNote').hidden = !state.prepaid
   showScreen('intro')
+}
+
+/** Ссылка /?p=… (оплатил через менеджера): подставляем его попытку, после теста — сразу результат. */
+export async function startPrepaid(p: string) {
+  try {
+    const res = await openPrepaid(p)
+    if (res.lang) setLang(res.lang)
+    if (res.done && res.r) {
+      state.resultToken = res.r
+      save()
+      history.replaceState(null, '', `/?r=${res.r}`)
+      return openResult(res.r)
+    }
+    history.replaceState(null, '', '/')
+    if (state.prepaid && state.attemptId === res.id && hasProgress()) return resumeQuiz() // уже начал на этом устройстве
+    resetForNewTest(res.name || '')
+    setAttempt(res.id!, res.token!)
+    state.prepaid = true
+    save()
+    showIntro()
+  } catch {
+    history.replaceState(null, '', '/')
+    showIntro()
+  }
 }

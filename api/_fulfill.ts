@@ -126,3 +126,29 @@ export async function fulfillRetake(a: AttemptRow, originalId: number): Promise<
       : ''
   ])
 }
+
+/** Оплата вне сайта: клиент прошёл тест по ссылке /?p=… — ссылка на результат в WhatsApp и уведомление в Telegram. */
+export async function fulfillPrepaid(a: AttemptRow): Promise<void> {
+  await logEvent({ type: 'prepaid_done', attemptId: a.id, sid: a.sid, utm: a.utm, trainerCode: a.trainer_code })
+  const link = resultLink(a.id)
+  let waSent = false
+  let waFrom = ''
+  if (a.phone && whatsappConfigured()) {
+    const w = await sendWhatsApp(a.phone, resultLinkMessage(a.name, link, a.lang))
+    waSent = w.sent
+    waFrom = w.from || ''
+  }
+  const blocked = blockedLabel(a)
+  await tgNotify([
+    '✅ <b>ПРОШЁЛ ТЕСТ — оплата вне сайта</b>',
+    `👤 ${a.name || '—'}`,
+    `📱 <code>${a.phone || '—'}</code>`,
+    a.dominant ? `🧠 ${comboLabel(a.dominant, a.combo)}` : '',
+    blocked ? `⚠️ Заблокированность отделов: ${blocked} — клиенту предложена бесплатная пересдача` : '',
+    `🔗 ${link}`,
+    adminAttemptLink(a.id),
+    whatsappConfigured() && a.phone
+      ? (waSent ? `📲 Ссылка на результат отправлена клиенту в WhatsApp ✅${waFrom ? `\n📤 С номера: <code>${fmtWaNumber(waFrom)}</code>` : ''}` : '📲 ❗️WhatsApp не доставлен — перешли ссылку клиенту')
+      : ''
+  ])
+}

@@ -15,6 +15,7 @@ export type UiText = {
   authorRole: string
   authorVideoRole: string
   disclaimer: string
+  prepaidNote: string
   retake: {
     title: string
     text: (pairs: string) => string

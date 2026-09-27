@@ -161,6 +161,24 @@ export async function grantRetake(id: number, originalId: number): Promise<Attem
   return rows[0] ? { ...rows[0], id: Number(rows[0].id) } : null
 }
 
+/**
+ * Оплата вне сайта: попытка создаётся заранее уже оплаченной (paid_by = 'prepaid') + платёж manual.
+ * Клиент проходит тест по ссылке /?p=…; по завершении результат открывается без экрана оплаты.
+ */
+export async function createPrepaidAttempt(p: { phone: string; name: string; lang: 'ru' | 'kk'; amount: number; method: string; trainerCode: string | null; note: string }): Promise<AttemptRow> {
+  const rows = await qx<AttemptRow>('create_prepaid', `
+    INSERT INTO attempts (name, lang, phone, trainer_id, trainer_code, status, paid_by, paid_at, notes)
+    VALUES ($1, $2, $3, (SELECT id FROM trainers WHERE code = $4 AND active), $4, 'paid', 'prepaid', now(), $5)
+    RETURNING *`, [p.name.slice(0, 60), p.lang, p.phone, p.trainerCode, p.note.slice(0, 2000)])
+  const a = { ...rows[0], id: Number(rows[0].id) }
+  await qx('prepaid_payment',
+    `INSERT INTO payments (invoice_id, provider, attempt_id, phone, amount, status, source, method, paid_at)
+     VALUES ($1, 'manual', $2, $3, $4, 'paid', 'admin', $5, now()) ON CONFLICT (invoice_id) DO NOTHING`,
+    [`manual-${a.id}`, a.id, p.phone, p.amount, p.method])
+  await logEvent({ type: 'paid', attemptId: a.id, trainerCode: a.trainer_code, props: { amount: p.amount, provider: 'manual', method: p.method, source: 'admin', prepaid: true } })
+  return a
+}
+
 /** Прогресс из beacon'ов quiz_step: только вверх. */
 export async function bumpAnswered(id: number, step: number) {
   await q('bump_answered', 'UPDATE attempts SET answered = GREATEST(answered, $2), updated_at = now() WHERE id = $1', [id, step])

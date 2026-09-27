@@ -22,7 +22,7 @@ function post<T>(path: string, body: object): Promise<T> {
 export type Teaser = { dominant: NeuroKey; lowest: NeuroKey; combo: VideoKey }
 export type AttemptRes = { id: number; token: string; offline?: boolean; teaser?: Teaser; r?: string }
 
-export function startAttempt(p: { name: string; lang: Lang }): Promise<AttemptRes> {
+export function startAttempt(p: { name: string; lang: Lang; id?: number; token?: string }): Promise<AttemptRes> {
   return post('/api/attempt', { action: 'start', ...p, sid: getSid(), attr: getAttr() })
 }
 
@@ -58,4 +58,10 @@ export async function getResult(r: string): Promise<ResultPayload> {
 export type RecoverRes = { need_code?: boolean; manual?: boolean; r?: string }
 export function recover(p: { phone: string; code?: string; hp: string }): Promise<RecoverRes> {
   return post('/api/recover', { ...p, sid: getSid() })
+}
+
+/** Ссылка /?p=… (оплата вне сайта): попытка клиента или готовый результат. */
+export type PrepaidRes = { id?: number; token?: string; name?: string; lang?: Lang; done?: boolean; r?: string }
+export function openPrepaid(p: string): Promise<PrepaidRes> {
+  return post('/api/attempt', { action: 'prepaid', p, sid: getSid(), attr: getAttr() })
 }

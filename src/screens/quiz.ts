@@ -29,7 +29,8 @@ export function startQuiz() {
   state.index = 0
   showScreen('quiz')
   renderQuestion()
-  startAttempt({ name: state.name, lang }).then(r => { if (r.id) setAttempt(r.id, r.token) }).catch(() => {})
+  const own = state.prepaid && state.attemptId ? { id: state.attemptId, token: state.attemptToken } : {}
+  startAttempt({ name: state.name, lang, ...own }).then(r => { if (r.id) setAttempt(r.id, r.token) }).catch(() => {})
 }
 
 /** Продолжить незавершённый тест после перезагрузки. */
@@ -77,6 +78,9 @@ function goBack() {
   renderQuestion()
 }
 
+/** Повторить завершение после перезагрузки (пересдача / оплата вне сайта, ответ сервера не дошёл). */
+export function finishQuiz() { return finish() }
+
 async function finish() {
   finishing = true
   $('progressBar').style.width = '100%'
@@ -84,16 +88,18 @@ async function finish() {
   state.teaser = scoreAttempt(state.answers)
   save()
   const retake = state.retakeOf || undefined
-  if (retake) showResultLoading()
+  const prepaid = state.prepaid
+  if (retake || prepaid) showResultLoading()
   else renderCheckout({ loading: true })
   try {
     const r = await finishAttempt({ id: state.attemptId, token: state.attemptToken, answers: state.answers, name: state.name, lang, retake })
     if (r.id) setAttempt(r.id, r.token)
     if (r.teaser) { state.teaser = r.teaser; save() }
     if (r.r) {
-      // бесплатная пересдача засчитана — сразу к новому результату
+      // пересдача / оплата вне сайта — сразу к результату
       finishing = false
       state.retakeOf = ''
+      state.prepaid = false
       save()
       history.replaceState(null, '', `/?r=${r.r}`)
       return openResult(r.r)
@@ -101,7 +107,14 @@ async function finish() {
   } catch (e) {
     console.error('finish_failed', e)
   }
-  if (retake) { state.retakeOf = ''; save() } // пересдачу не засчитали — обычная оплата
   finishing = false
+  if (prepaid) {
+    // оплачено вне сайта: оплата не нужна — показываем ошибку связи, после перезагрузки повторим
+    $('resultLoading').hidden = true
+    $('resultError').textContent = T().ui.errors.network
+    $('resultError').hidden = false
+    return
+  }
+  if (retake) { state.retakeOf = ''; save() } // пересдачу не засчитали — обычная оплата
   renderCheckout({})
 }

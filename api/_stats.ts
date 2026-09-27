@@ -131,14 +131,14 @@ export async function trainersStats(from: Date, to: Date): Promise<{ rows: Train
 }
 
 // ── последние оплаты ──
-export type PaidRow = { paid_at: string; amount: number; provider: string; phone: string; name: string | null; attempt_id: number | null; trainer_code: string | null; source: string | null; test_amount: number | null }
+export type PaidRow = { paid_at: string; amount: number; provider: string; method: string | null; phone: string; name: string | null; attempt_id: number | null; trainer_code: string | null; source: string | null; test_amount: number | null }
 export async function recentPaid(limit = 10): Promise<PaidRow[]> {
   const rows = await q<Record<string, unknown>>('recent_paid', `
-    SELECT p.paid_at, p.amount, p.provider, p.phone, a.name, p.attempt_id, a.trainer_code, a.utm->>'utm_source' AS source, a.test_amount
+    SELECT p.paid_at, p.amount, p.provider, p.method, p.phone, a.name, p.attempt_id, a.trainer_code, a.utm->>'utm_source' AS source, a.test_amount
     FROM payments p LEFT JOIN attempts a ON a.id = p.attempt_id
     WHERE p.status = 'paid' ORDER BY p.paid_at DESC NULLS LAST LIMIT $1`, [limit])
   return rows.map(r => ({
-    paid_at: String(r.paid_at), amount: Number(r.amount ?? 0), provider: String(r.provider ?? ''), phone: String(r.phone ?? ''),
+    paid_at: String(r.paid_at), amount: Number(r.amount ?? 0), provider: String(r.provider ?? ''), method: (r.method as string) ?? null, phone: String(r.phone ?? ''),
     name: (r.name as string) ?? null, attempt_id: r.attempt_id != null ? Number(r.attempt_id) : null,
     trainer_code: (r.trainer_code as string) ?? null, source: (r.source as string) ?? null, test_amount: r.test_amount != null ? Number(r.test_amount) : null
   }))

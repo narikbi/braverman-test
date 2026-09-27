@@ -494,3 +494,6 @@ a.btn-block { display: block; }
 .retake-text { color: #5B5140; font-size: 15px; line-height: 1.55; }
 .retake-card .btn-block { margin-top: 16px; }
 .retake-note { margin-top: 10px; font-size: 13px; color: var(--muted); text-align: center; }
+
+/* оплата вне сайта: пометка на главной */
+.prepaid-note { margin-top: 14px; padding: 10px 14px; border-radius: var(--radius-sm); background: #EEFBF5; border: 1px solid #BFEBD7; color: #1F7A57; font-size: 14px; font-weight: 600; }

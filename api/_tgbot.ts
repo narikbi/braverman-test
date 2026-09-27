@@ -156,7 +156,8 @@ export async function paymentsReport(limit = 10): Promise<string> {
   if (!rows.length) return '🧾 Оплат пока нет.'
   const out = [`🧾 <b>Последние оплаты</b> <i>(${rows.length})</i>`, '']
   for (const r of rows) {
-    const from = r.trainer_code ? `тренер ${r.trainer_code}` : r.source || (r.provider === 'manual' ? 'выдано вручную' : 'прямой')
+    const via = r.provider === 'manual' ? `вручную${r.method ? ` · ${r.method}` : ''}` : ''
+    const from = [via, r.trainer_code ? `тренер ${r.trainer_code}` : r.source || (via ? '' : 'прямой')].filter(Boolean).join(' · ')
     out.push(`${dmt(r.paid_at)} · <b>${money(r.amount)}</b>${r.test_amount ? ' <i>(тест)</i>' : ''} · ${esc(r.name || '—')} · <code>${esc(r.phone)}</code> · ${esc(from)}`)
   }
   out.push('', `🛠 ${SITE()}/admin#/payments`)

@@ -5,6 +5,7 @@ import { renderTable, type TableState } from '../components/table'
 import { navigate } from '../router'
 import { toast } from '../components/toast'
 import { dbMissing } from './shared'
+import { openPrepaidDialog } from './prepaid-dialog'
 
 export type Attempt = Record<string, unknown> & {
   id: number; name: string; phone: string | null; lang: string; status: string; answered: number; dominant: string | null; combo: string | null
@@ -32,6 +33,7 @@ export async function renderAttempts(page: HTMLElement, fixedTrainer?: number) {
         <select class="input" id="lang"><option value="">Любой язык</option><option value="ru" ${st.lang === 'ru' ? 'selected' : ''}>Русский</option><option value="kk" ${st.lang === 'kk' ? 'selected' : ''}>Қазақша</option></select>
         ${trainers.length ? `<select class="input" id="trainer"><option value="">Все тренеры</option>${trainers.map(t => `<option value="${t.id}" ${st.trainer === String(t.id) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>` : ''}
         <button class="btn" id="export">⬇ CSV</button>
+        ${isAdmin() && !fixedTrainer ? '<button class="btn btn-primary" id="prepaid">＋ Оплата вне сайта</button>' : ''}
       </div>
       <div id="tbl"><div class="skel" style="height:120px"></div></div>
     </div></div>`
@@ -43,7 +45,7 @@ export async function renderAttempts(page: HTMLElement, fixedTrainer?: number) {
         { key: 'created_at', label: 'Дата', sortable: true, render: r => `<span class="muted">${fmtDate(r.created_at)}</span>` },
         { key: 'name', label: 'Имя', sortable: true, render: r => `<b>${esc(r.name || '—')}</b><br /><span class="muted" style="font-size:12px">${fmtLang(r.lang)}</span>` },
         { key: 'phone', label: 'Телефон', render: r => fmtPhone(r.phone) },
-        { key: 'status', label: 'Статус', sortable: true, render: r => badge(r.status) + (r.status === 'started' ? ` <span class="muted" style="font-size:12px">${r.answered}/200</span>` : '') + (r.test_amount ? ' <span class="chip">тест</span>' : '') + (r.paid_by === 'retake' ? ' <span class="chip">пересдача</span>' : '') + (fmtBlocked(r) ? ` <span class="chip chip-warn" title="Заблокированность отделов: ${esc(fmtBlocked(r))}">блок</span>` : '') },
+        { key: 'status', label: 'Статус', sortable: true, render: r => badge(r.status) + (r.status === 'started' ? ` <span class="muted" style="font-size:12px">${r.answered}/200</span>` : '') + (r.test_amount ? ' <span class="chip">тест</span>' : '') + (r.paid_by === 'retake' ? ' <span class="chip">пересдача</span>' : '') + (r.paid_by === 'prepaid' ? ` <span class="chip">вне сайта</span>${r.dominant ? '' : ' <span class="chip chip-warn">ждёт теста</span>'}` : '') + (fmtBlocked(r) ? ` <span class="chip chip-warn" title="Заблокированность отделов: ${esc(fmtBlocked(r))}">блок</span>` : '') },
         { key: 'dominant', label: 'Доминанты', sortable: true, render: r => r.dominant ? `<b>${esc(r.combo ? fmtCombo(r.combo) : fmtNeuro(r.dominant))}</b>` : '<span class="muted">—</span>' },
         ...(isAdmin() && !fixedTrainer ? [{ key: 'trainer_name', label: 'Тренер', render: (r: Attempt) => r.trainer_name ? esc(r.trainer_name) : r.trainer_code ? `<span class="muted">${esc(r.trainer_code)}?</span>` : '<span class="muted">—</span>' }] : []),
         { key: 'source', label: 'Источник', render: r => `<span class="muted">${esc(r.source || (r.trainer_code ? 'тренер' : '—'))}${r.campaign ? ` · ${esc(r.campaign)}` : ''}</span>` },
@@ -71,5 +73,6 @@ export async function renderAttempts(page: HTMLElement, fixedTrainer?: number) {
       URL.revokeObjectURL(a.href)
     } catch { toast('Не удалось выгрузить', 'err') }
   })
+  page.querySelector('#prepaid')?.addEventListener('click', () => openPrepaidDialog(() => load()))
   await load()
 }
