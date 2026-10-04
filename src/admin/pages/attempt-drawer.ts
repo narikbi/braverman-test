@@ -44,7 +44,7 @@ export async function openAttemptDrawer(id: number, onClose: () => void) {
   body.innerHTML = `
     <div>
       <div style="font-size:20px;font-weight:800">${esc(a.name || 'Без имени')}</div>
-      <div class="row-actions" style="margin-top:6px">${badge(a.status)}${a.status === 'started' ? `<span class="chip">${a.answered}/200</span>` : ''}${a.test_amount ? '<span class="chip">тестовый счёт</span>' : ''}${a.paid_by === 'admin' ? '<span class="chip">выдано вручную</span>' : ''}${a.paid_by === 'prepaid' ? '<span class="chip">оплата вне сайта</span>' : ''}${a.paid_by === 'retake' ? '<span class="chip">пересдача</span>' : ''}
+      <div class="row-actions" style="margin-top:6px">${badge(a.status)}${a.status === 'started' ? `<span class="chip">${a.answered}/200</span>` : ''}${a.test_amount ? '<span class="chip">тестовый счёт</span>' : ''}${a.paid_by === 'admin' ? '<span class="chip">выдано вручную</span>' : ''}${a.paid_by === 'prepaid' ? '<span class="chip">оплата вне сайта</span>' : ''}${a.paid_by === 'retake' ? '<span class="chip">пересдача</span>' : ''}${a.paid_by === 'trainer' ? '<span class="chip">свой тест тренера</span>' : ''}
         ${digits && !a.phone!.includes('•') ? `<a class="btn btn-sm" href="https://wa.me/${digits}" target="_blank" rel="noopener">WhatsApp</a><a class="btn btn-sm" href="tel:+${digits}">Позвонить</a>` : ''}</div>
     </div>
     <div class="kv">
@@ -60,6 +60,8 @@ export async function openAttemptDrawer(id: number, onClose: () => void) {
       ${isAdmin() ? `<span class="k">Счёт</span><span class="v">${a.invoice_id ? `Kaspi #${esc(a.invoice_id)}` : (a.invoice_error ? `<span style="color:var(--a-red)">не выставлен: ${esc(a.invoice_error.slice(0, 80))}</span>` : '—')}</span>` : ''}
       <span class="k">Оплата</span><span class="v">${a.paid_at ? `<span style="color:var(--a-green)">${fmtDateFull(a.paid_at)}</span>` : '—'}</span>
     </div>
+
+    ${(a as { resultHidden?: boolean }).resultHidden ? `<div class="warn-box">🔒 Клиент прошёл тест, но ещё не оплатил. Баллы, тип и ответы откроются здесь после оплаты — можно напомнить клиенту об оплате.</div>` : ''}
 
     ${d.prepaidLink ? `<div class="card" style="box-shadow:none"><div class="card-head"><h2>Ссылка на тест</h2><span class="hint">оплата вне сайта · ждёт прохождения</span></div><div class="card-body">
       <div class="muted" style="font-size:13px;margin-bottom:10px">Клиент проходит тест по этой ссылке — оплата не нужна, результат откроется сразу и придёт в WhatsApp.</div>

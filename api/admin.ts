@@ -2,18 +2,21 @@
 // GET: me, health, overview, funnel, timeline, sources, trainers-stats, attempts, attempt, payments, export, trainers, trainer
 // POST (JSON, заголовок X-Requested-With: admin): login, logout, attempt-update, attempt-grant, attempt-resend,
 //       trainer-create, trainer-update, trainer-password, tg-setup, prepaid-create, prepaid-grant, prepaid-send
+// Тренер: GET me-profile; единственный разрешённый ему POST — self-test (свой бесплатный тест).
 // Роль trainer видит только свои попытки (scope по trainer_id / trainer_code); POST-действия ей запрещены.
 import { adminConfigured, checkCredentials, makeSession, sessionFromReq, sessionCookie, clearCookie, hashPassword, verifyPassword, type Session } from './_admin-auth.js'
 import {
   dbConfigured, q, ipHash, logEvent, ATTEMPT_STATUSES, type AttemptRow, getAttempt, setAttemptNotes, grantManualPaid, setPaymentLinkSent,
-  listTrainers, getTrainer, createTrainer, updateTrainer, setTrainerPassword, findTrainerByLogin, touchTrainerLogin, createPrepaidAttempt
+  listTrainers, getTrainer, createTrainer, updateTrainer, setTrainerPassword, findTrainerByLogin, touchTrainerLogin, createPrepaidAttempt,
+  createTrainerSelfAttempt, trainerSelfAttempts
 } from './_db.js'
 import { sendWhatsApp, whatsappConfigured } from './_whatsapp.js'
 import { resultLinkMessage, prepaidLinkMessage } from './_wa-text.js'
 import { resultLink } from './_fulfill.js'
 import { kpaConfigured } from './_kpa.js'
 import { tgConfigured, tgNotify, SITE, PRICE, bodyOf, queryOf, normalizePhone, adminAttemptLink } from './_lib.js'
-import { makePrepaidToken } from './_access.js'
+import { makePrepaidToken, makeResultToken } from './_access.js'
+import { blockedPairs } from '../shared/scoring.js'
 import { tgSetup, tgStatus } from './_tgbot.js'
 import { almatyDate, parseRange, funnelCounts, kpi, sourcesStats, trainersStats, FUNNEL_TYPES, FUNNEL_LABELS, type Scope } from './_stats.js'
 
@@ -24,6 +27,21 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 const PREPAID_METHODS = ['Halyk', 'Kaspi перевод', 'Наличные', 'Другое']
 const prepaidLink = (id: number) => `${SITE()}/?p=${makePrepaidToken(id)}`
+
+/** Результат тренеру не показываем, пока клиент не оплатил (иначе можно пересказать бесплатно). */
+function hideUnpaid<T extends Record<string, unknown>>(x: T): T {
+  if (x.status === 'paid') return x
+  return { ...x, dopamine: null, acetylcholine: null, gaba: null, serotonin: null, dominant: null, lowest: null, combo: null, resultHidden: x.dominant != null }
+}
+
+/** Свой результат тренера для профиля / карточки тренера. */
+function selfResultView(a: AttemptRow) {
+  const scores = { dopamine: a.dopamine, acetylcholine: a.acetylcholine, gaba: a.gaba, serotonin: a.serotonin }
+  return {
+    id: Number(a.id), finished_at: a.finished_at, scores, dominant: a.dominant, lowest: a.lowest, combo: a.combo, lang: a.lang,
+    blocked: blockedPairs(scores), resultLink: `${SITE()}/?r=${makeResultToken(Number(a.id))}`
+  }
+}
 
 const ATTEMPT_SORT: Record<string, string> = { created_at: 'a.created_at', name: 'a.name', status: 'a.status', paid_at: 'a.paid_at', dominant: 'a.dominant', answered: 'a.answered' }
 
@@ -102,7 +120,7 @@ export default async function handler(req: Req, res: Res) {
     if (!t || !t.active) { res.setHeader('Set-Cookie', clearCookie()); return res.status(401).json({ ok: false, error: 'unauthorized' }) }
     scope = { trainerId: Number(t.id), trainerCode: t.code }
     trainerMe = { id: Number(t.id), name: t.name, code: t.code }
-    if (isPost) return res.status(403).json({ ok: false, error: 'forbidden' })
+    if (isPost && action !== 'self-test') return res.status(403).json({ ok: false, error: 'forbidden' })
   }
 
   if (action === 'me') {
@@ -199,7 +217,10 @@ export default async function handler(req: Req, res: Res) {
         AND ($6::text IS NULL OR a.lang = $6)
       ORDER BY ${sort} ${dir} NULLS LAST, a.id DESC LIMIT $7 OFFSET $8`, [r.from, r.to, status, search, trainerCode, lang, limit, (page - 1) * limit])
     const total = Number(rows[0]?.total ?? 0)
-    const items = rows.map(({ total: _t, ...x }) => (seesPhone(session) ? x : { ...x, phone: maskPhone(x.phone) }))
+    const items = rows.map(({ total: _t, ...x }) => {
+      const row = seesPhone(session) ? x : { ...x, phone: maskPhone(x.phone) }
+      return isAdmin ? row : hideUnpaid(row)
+    })
     if (action === 'export') {
       const head = ['id', 'created_at', 'name', 'phone', 'lang', 'status', 'answered', 'dopamine', 'acetylcholine', 'gaba', 'serotonin', 'dominant', 'combo', 'trainer_name', 'trainer_code', 'source', 'campaign', 'invoice_id', 'paid_at', 'paid_by']
       const cell = (v: unknown) => csvEscape(v instanceof Date ? v.toISOString() : v)
@@ -221,7 +242,12 @@ export default async function handler(req: Req, res: Res) {
     ])
     const attempt: Partial<AttemptRow> = { ...a }
     if (!isAdmin) { delete attempt.notes; delete attempt.invoice_error; delete attempt.invoice_ref; if (!seesPhone(session)) attempt.phone = maskPhone(a.phone) }
-    return res.status(200).json({ ok: true, attempt, payments, events, trainer: trainer ? { id: trainer.id, name: trainer.name, code: trainer.code } : null, resultLink: a.status === 'paid' && a.dominant != null ? resultLink(a.id) : null, prepaidLink: isAdmin && a.paid_by === 'prepaid' && a.dominant == null ? prepaidLink(a.id) : null })
+    if (!isAdmin && a.status !== 'paid') Object.assign(attempt, hideUnpaid(attempt as Record<string, unknown>), { answers: null })
+    // в ленте событий у неоплаченного тоже не показываем тип (quiz_finish хранит dominant/combo)
+    const evs = !isAdmin && a.status !== 'paid'
+      ? (events as { props?: Record<string, unknown> }[]).map(e => ({ ...e, props: Object.fromEntries(Object.entries(e.props || {}).filter(([k]) => !['dominant', 'lowest', 'combo'].includes(k))) }))
+      : events
+    return res.status(200).json({ ok: true, attempt, payments, events: evs, trainer: trainer ? { id: trainer.id, name: trainer.name, code: trainer.code } : null, resultLink: a.status === 'paid' && a.dominant != null ? resultLink(a.id) : null, prepaidLink: isAdmin && a.paid_by === 'prepaid' && a.dominant == null ? prepaidLink(a.id) : null })
   }
 
   if (action === 'payments') {
@@ -249,8 +275,9 @@ export default async function handler(req: Req, res: Res) {
     const t = id ? await getTrainer(id) : null
     if (!t) return res.status(404).json({ ok: false, error: 'not_found' })
     const s: Scope = { trainerId: t.id, trainerCode: t.code }
-    const [k, prev, f] = await Promise.all([kpi(r.from, r.to, s), kpi(r.prevFrom, r.prevTo, s), funnelCounts(r.from, r.to, s)])
-    return res.status(200).json({ ok: true, trainer: t, link: `${SITE()}/t/${t.code}`, kpi: k, prev, funnel: FUNNEL_TYPES.map(x => ({ key: x, label: FUNNEL_LABELS[x], count: f[x] })) })
+    const [k, prev, f, own] = await Promise.all([kpi(r.from, r.to, s), kpi(r.prevFrom, r.prevTo, s), funnelCounts(r.from, r.to, s), trainerSelfAttempts(Number(t.id))])
+    const last = own.find(a => a.dominant != null)
+    return res.status(200).json({ ok: true, trainer: t, link: `${SITE()}/t/${t.code}`, kpi: k, prev, funnel: FUNNEL_TYPES.map(x => ({ key: x, label: FUNNEL_LABELS[x], count: f[x] })), selfResult: last ? selfResultView(last) : null, selfCount: own.filter(a => a.dominant != null).length })
   }
 
   // ── POST-действия (только админ) ──
@@ -362,6 +389,34 @@ export default async function handler(req: Req, res: Res) {
     const waSent = (await sendWhatsApp(a.phone, prepaidLinkMessage(a.name, prepaidLink(a.id), a.lang))).sent
     await logEvent({ type: 'prepaid_link_sent', attemptId: a.id, props: { waSent } })
     return res.status(200).json({ ok: true, waSent })
+  }
+
+  // ── Кабинет тренера: профиль (ссылка для клиентов + свои результаты) и свой бесплатный тест ──
+  if (action === 'me-profile') {
+    if (isAdmin || !trainerMe) return res.status(403).json({ ok: false, error: 'forbidden' })
+    const own = await trainerSelfAttempts(trainerMe.id)
+    const done = own.filter(a => a.dominant != null)
+    const pending = own.find(a => a.dominant == null && a.paid_by === 'trainer')
+    return res.status(200).json({
+      ok: true,
+      trainer: trainerMe,
+      clientLink: `${SITE()}/t/${trainerMe.code}`,
+      results: done.map(selfResultView),
+      pending: pending ? { id: pending.id, answered: pending.answered, link: prepaidLink(pending.id) } : null
+    })
+  }
+
+  if (action === 'self-test') {
+    if (!isPost) return res.status(405).json({ ok: false })
+    if (isAdmin || !trainerMe) return res.status(403).json({ ok: false, error: 'forbidden' })
+    const own = await trainerSelfAttempts(trainerMe.id)
+    let a = own.find(x => x.dominant == null && x.paid_by === 'trainer') // незаконченный — продолжаем его
+    if (!a) {
+      const t = await getTrainer(trainerMe.id)
+      a = await createTrainerSelfAttempt({ id: trainerMe.id, name: t?.name || trainerMe.name, phone: normalizePhone(t?.phone) })
+      await logEvent({ type: 'trainer_self_start', attemptId: a.id, props: { trainerId: trainerMe.id } })
+    }
+    return res.status(200).json({ ok: true, id: a.id, link: prepaidLink(a.id) })
   }
 
   // Подключить команды Telegram-бота: вебхук на /api/tg-webhook + меню команд в группе TG_CHAT_ID

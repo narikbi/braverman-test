@@ -152,3 +152,19 @@ export async function fulfillPrepaid(a: AttemptRow): Promise<void> {
       : ''
   ])
 }
+
+/** Свой тест тренера (бесплатно, из кабинета): уведомление в Telegram. Результат тренер видит в профиле. */
+export async function fulfillTrainerSelf(a: AttemptRow): Promise<void> {
+  await logEvent({ type: 'trainer_self_done', attemptId: a.id, props: { trainerId: a.self_trainer_id } })
+  const t = a.self_trainer_id
+    ? (await q<{ name: string; code: string }>('self_trainer', 'SELECT name, code FROM trainers WHERE id = $1', [a.self_trainer_id]))[0]
+    : null
+  const blocked = blockedLabel(a)
+  await tgNotify([
+    `🎓 <b>Тренер прошёл свой тест</b> (бесплатно)`,
+    `👤 ${t ? `${t.name} (${t.code})` : a.name || '—'}`,
+    a.dominant ? `🧠 ${comboLabel(a.dominant, a.combo)}` : '',
+    blocked ? `⚠️ Заблокированность отделов: ${blocked}` : '',
+    adminAttemptLink(a.id)
+  ])
+}

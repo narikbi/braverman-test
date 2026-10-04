@@ -3,9 +3,11 @@
 // Без DATABASE_URL тест работает, но ничего не сохраняется (id=0).
 import { dbConfigured, createAttempt, finishAttempt, logEvent, ipHash, cleanAttribution, getAttempt, retakeInfo, grantRetake, type AttemptMeta } from './_db.js'
 import { makeAttemptToken, verifyAttemptToken, verifyResultToken, makeResultToken, verifyPrepaidToken } from './_access.js'
-import { fulfillRetake, fulfillPrepaid } from './_fulfill.js'
+import { fulfillRetake, fulfillPrepaid, fulfillTrainerSelf } from './_fulfill.js'
 import { bodyOf } from './_lib.js'
 import { scoreAttempt, isValidAnswers, blockedPairs, MAX_FREE_RETAKES } from '../shared/scoring.js'
+
+const PREPAID_KINDS = ['prepaid', 'trainer']
 
 type Req = { method?: string; headers: Record<string, string | string[] | undefined>; body?: unknown }
 type Res = { status: (code: number) => { json: (o: object) => void }; setHeader: (k: string, v: string) => void }
@@ -32,9 +34,10 @@ export default async function handler(req: Req, res: Res) {
     if (action === 'prepaid') {
       const pid = verifyPrepaidToken(typeof b.p === 'string' ? b.p : '')
       const a = pid ? await getAttempt(pid) : null
-      if (!a || a.paid_by !== 'prepaid') return res.status(404).json({ ok: false, error: 'not_found' })
+      // ссылка /?p=…: оплата вне сайта (prepaid) или свой бесплатный тест тренера (trainer)
+      if (!a || !PREPAID_KINDS.includes(String(a.paid_by))) return res.status(404).json({ ok: false, error: 'not_found' })
       if (a.dominant != null) return res.status(200).json({ ok: true, done: true, r: makeResultToken(Number(a.id)), lang: a.lang })
-      await logEvent({ type: 'prepaid_open', attemptId: a.id, ...common, trainerCode: a.trainer_code })
+      await logEvent({ type: 'prepaid_open', attemptId: a.id, ...common, trainerCode: a.self_trainer_id ? null : a.trainer_code })
       const aid = Number(a.id) // bigint из Neon приходит строкой
       return res.status(200).json({ ok: true, id: aid, token: makeAttemptToken(aid), name: a.name, lang: a.lang })
     }
@@ -43,7 +46,8 @@ export default async function handler(req: Req, res: Res) {
       // предоплаченная попытка уже создана — новую не заводим, только отмечаем старт
       const existing = Number(b.id) || 0
       if (existing && verifyAttemptToken(existing, String(b.token || ''))) {
-        await logEvent({ type: 'quiz_start', attemptId: existing, ...common })
+        const own = await getAttempt(existing)
+        await logEvent({ type: 'quiz_start', attemptId: existing, ...common, ...(own?.self_trainer_id ? { trainerCode: null } : {}) })
         return res.status(200).json({ ok: true, id: existing, token: makeAttemptToken(existing) })
       }
       const { id } = await createAttempt(meta)
@@ -66,10 +70,14 @@ export default async function handler(req: Req, res: Res) {
       }
       const r = scoreAttempt(b.answers)
       const done = await finishAttempt(id, { answers: b.answers, ...r }, meta)
-      await logEvent({ type: 'quiz_finish', attemptId: id, ...common, props: { dominant: r.dominant, lowest: r.lowest, combo: r.combo } })
+      await logEvent({ type: 'quiz_finish', attemptId: id, ...common, ...(done.self_trainer_id ? { trainerCode: null } : {}), props: { dominant: r.dominant, lowest: r.lowest, combo: r.combo } })
       const teaser = { dominant: r.dominant, lowest: r.lowest, combo: r.combo }
 
-      // Оплата вне сайта: результат сразу, без экрана оплаты
+      // Оплата вне сайта / свой тест тренера: результат сразу, без экрана оплаты
+      if (done.status === 'paid' && done.paid_by === 'trainer') {
+        await fulfillTrainerSelf({ ...done, id })
+        return res.status(200).json({ ok: true, id, token: makeAttemptToken(id), teaser, r: makeResultToken(id) })
+      }
       if (done.status === 'paid' && done.paid_by === 'prepaid') {
         await fulfillPrepaid({ ...done, id })
         return res.status(200).json({ ok: true, id, token: makeAttemptToken(id), teaser, r: makeResultToken(id) })

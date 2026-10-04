@@ -103,3 +103,8 @@ CREATE INDEX IF NOT EXISTS attempts_retake_idx ON attempts (retake_of);
 -- Оплата вне сайта (через менеджера: Halyk, наличные, перевод): способ оплаты для отчётов.
 -- Такая попытка создаётся заранее со status = 'paid', paid_by = 'prepaid'; клиент проходит тест по ссылке /?p=<токен>.
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS method text;
+
+-- Свой тест тренера (бесплатно, из кабинета): попытка paid_by = 'trainer', владелец — self_trainer_id.
+-- trainer_code у неё NULL, поэтому она не попадает к тренеру в «Клиенты» и в его статистику; платежа нет.
+ALTER TABLE attempts ADD COLUMN IF NOT EXISTS self_trainer_id bigint REFERENCES trainers(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS attempts_self_trainer_idx ON attempts (self_trainer_id, created_at DESC);

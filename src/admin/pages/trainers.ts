@@ -1,7 +1,7 @@
 // Тренеры: список со статистикой за период, карточка тренера (KPI, воронка, ссылка, клиенты).
 import { adminGet, ApiError } from '../api'
 import { rangeParams, META } from '../state'
-import { esc, fmtMoney, fmtNum, fmtDateFull, fmtPhone } from '../format'
+import { esc, fmtMoney, fmtNum, fmtDateFull, fmtPhone, fmtCombo } from '../format'
 import { toast } from '../components/toast'
 import { kpiSkeleton } from '../components/kpi'
 import { openTrainerDialog, type TrainerRow } from './trainer-dialog'
@@ -10,7 +10,10 @@ import { renderAttempts } from './attempts'
 import { dbMissing } from './shared'
 
 type Stats = { rows: { id: number; code: string; name: string; active: boolean; visits: number; started: number; finished: number; paid: number; revenue: number }[]; unknown: { code: string; visits: number; started: number }[] }
-type Detail = { trainer: TrainerRow; link: string; kpi: Kpi; prev: Kpi; funnel: { key: string; label: string; count: number }[] }
+type Detail = {
+  trainer: TrainerRow; link: string; kpi: Kpi; prev: Kpi; funnel: { key: string; label: string; count: number }[]
+  selfResult: { id: number; finished_at: string; combo: string; blocked: unknown[]; resultLink: string } | null; selfCount: number
+}
 
 export async function renderTrainers(page: HTMLElement) {
   page.innerHTML = `<div class="card"><div class="card-body">
@@ -60,6 +63,13 @@ export async function renderTrainer(page: HTMLElement, id: number) {
     <div class="section grid grid-kpi" id="kpis">${kpiCards(d.kpi, d.prev)}</div>
     <div class="section grid grid-2">
       <div class="card"><div class="card-head"><h2>Воронка</h2></div><div class="card-body"><div class="funnel">${funnelHtml(d.funnel)}</div></div></div>
+      <div class="card"><div class="card-head"><h2>Результат тренера</h2><span class="hint">свой бесплатный тест${d.selfCount > 1 ? ` · пройден ${d.selfCount} раз` : ''}</span></div><div class="card-body">
+        ${d.selfResult ? `
+          <div style="font-size:17px;font-weight:800">${esc(fmtCombo(d.selfResult.combo))}</div>
+          <div class="muted" style="font-size:12.5px;margin:2px 0 10px">пройден ${fmtDateFull(d.selfResult.finished_at)}${d.selfResult.blocked.length ? ' · <span class="chip chip-warn">блок</span>' : ''}</div>
+          <div class="row-actions"><a class="btn btn-sm" href="${esc(d.selfResult.resultLink)}" target="_blank" rel="noopener">Открыть результат</a><a class="btn btn-sm" href="#/attempts/${d.selfResult.id}">Карточка прохождения</a></div>`
+        : '<div class="empty" style="padding:12px 0">Тренер ещё не проходил тест. Он может пройти его бесплатно в своём кабинете → «Профиль».</div>'}
+      </div></div>
     </div>
     <div class="section" id="clients"></div>`
   page.querySelector('#copy')!.addEventListener('click', () => navigator.clipboard.writeText(d.link).then(() => toast('Ссылка скопирована')))

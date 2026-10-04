@@ -4,6 +4,7 @@ import { adminGet, Unauthorized } from './api'
 import { parseRoute, navigate } from './router'
 import { onRange, setMeta, isAdmin, type Meta } from './state'
 import { renderShell } from './layout'
+import { renderProfile } from './pages/profile'
 import { renderLogin } from './pages/login'
 import { renderDashboard } from './pages/dashboard'
 import { renderAttempts } from './pages/attempts'
@@ -50,6 +51,7 @@ async function render() {
       case 'trainers': if (!isAdmin()) return navigate('#/'); return await renderTrainers(renderShell('trainers', 'Тренеры', 'Партнёрские ссылки и их результаты'))
       case 'trainer': if (!isAdmin()) return navigate('#/'); return await renderTrainer(renderShell('trainer', 'Тренер', ''), route.id!)
       case 'health': if (!isAdmin()) return navigate('#/'); return await renderHealth(renderShell('health', 'Система', 'Состояние интеграций', false))
+      case 'me': if (isAdmin()) return navigate('#/'); return await renderProfile(renderShell('me', 'Профиль', 'Ваша ссылка для клиентов и ваш результат', false))
     }
   } catch (e) {
     if (e instanceof Unauthorized) { authed = false; return navigate('#/login') }

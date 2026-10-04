@@ -1,5 +1,5 @@
-// Hash-роутер: #/ #/attempts #/attempts/:id #/payments #/trainers #/trainers/:id #/health #/login
-export type Route = { name: 'dashboard' | 'attempts' | 'attempt' | 'payments' | 'trainers' | 'trainer' | 'health' | 'login'; id?: number }
+// Hash-роутер: #/ #/attempts #/attempts/:id #/payments #/trainers #/trainers/:id #/health #/me #/login
+export type Route = { name: 'dashboard' | 'attempts' | 'attempt' | 'payments' | 'trainers' | 'trainer' | 'health' | 'me' | 'login'; id?: number }
 
 export function parseRoute(): Route {
   const h = location.hash.replace(/^#\/?/, '')
@@ -9,6 +9,7 @@ export function parseRoute(): Route {
   if (seg === 'trainers') return id ? { name: 'trainer', id: Number(id) } : { name: 'trainers' }
   if (seg === 'payments') return { name: 'payments' }
   if (seg === 'health') return { name: 'health' }
+  if (seg === 'me') return { name: 'me' }
   return { name: 'dashboard' }
 }
 

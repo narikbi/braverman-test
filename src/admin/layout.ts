@@ -15,7 +15,8 @@ const NAV_ADMIN = [
 ]
 const NAV_TRAINER = [
   { hash: '#/', ic: '📊', label: 'Дашборд', match: 'dashboard' },
-  { hash: '#/attempts', ic: '👥', label: 'Клиенты', match: 'attempts' }
+  { hash: '#/attempts', ic: '👥', label: 'Клиенты', match: 'attempts' },
+  { hash: '#/me', ic: '🧠', label: 'Профиль', match: 'me' }
 ]
 
 export function renderShell(active: string, title: string, sub = '', withRange = true): HTMLElement {

@@ -114,6 +114,7 @@ export type AttemptRow = {
   test_amount: number | null
   notes: string
   retake_of: number | null
+  self_trainer_id: number | null
 }
 
 export type AttemptMeta = { sid?: string | null; name?: string; lang?: 'ru' | 'kk'; attr?: Attribution }
@@ -152,7 +153,10 @@ export async function grantRetake(id: number, originalId: number): Promise<Attem
     UPDATE attempts a SET
       retake_of = o.id, status = 'paid', paid_by = 'retake', paid_at = COALESCE(a.paid_at, now()),
       phone = COALESCE(a.phone, o.phone),
-      trainer_code = COALESCE(a.trainer_code, o.trainer_code), trainer_id = COALESCE(a.trainer_id, o.trainer_id),
+      -- пересдача своего теста тренера остаётся его тестом (в профиле, не в «Клиентах»)
+      self_trainer_id = o.self_trainer_id,
+      trainer_code = CASE WHEN o.self_trainer_id IS NOT NULL THEN NULL ELSE COALESCE(a.trainer_code, o.trainer_code) END,
+      trainer_id = CASE WHEN o.self_trainer_id IS NOT NULL THEN NULL ELSE COALESCE(a.trainer_id, o.trainer_id) END,
       utm = CASE WHEN a.utm = '{}'::jsonb THEN o.utm ELSE a.utm END,
       updated_at = now()
     FROM attempts o
@@ -179,6 +183,21 @@ export async function createPrepaidAttempt(p: { phone: string; name: string; lan
   return a
 }
 
+/** Свой тест тренера: бесплатная попытка (paid_by = 'trainer'), без платежа и без trainer_code. */
+export async function createTrainerSelfAttempt(t: { id: number; name: string; phone: string | null }): Promise<AttemptRow> {
+  const rows = await qx<AttemptRow>('create_trainer_self', `
+    INSERT INTO attempts (name, lang, phone, status, paid_by, paid_at, self_trainer_id)
+    VALUES ($1, 'kk', $2, 'paid', 'trainer', now(), $3) RETURNING *`, [t.name.slice(0, 60), t.phone, t.id])
+  return { ...rows[0], id: Number(rows[0].id) }
+}
+
+/** Свои тесты тренера: пройденные (новые сверху) и незаконченный, если есть. */
+export async function trainerSelfAttempts(trainerId: number): Promise<AttemptRow[]> {
+  const rows = await q<AttemptRow>('trainer_self', `
+    SELECT * FROM attempts WHERE self_trainer_id = $1 ORDER BY created_at DESC LIMIT 50`, [trainerId])
+  return rows.map(r => ({ ...r, id: Number(r.id) }))
+}
+
 /** Прогресс из beacon'ов quiz_step: только вверх. */
 export async function bumpAnswered(id: number, step: number) {
   await q('bump_answered', 'UPDATE attempts SET answered = GREATEST(answered, $2), updated_at = now() WHERE id = $1', [id, step])
@@ -194,8 +213,9 @@ export async function finishAttempt(id: number, r: { answers: number[]; scores: 
       status = CASE WHEN status = 'started' THEN 'finished' ELSE status END,
       finished_at = COALESCE(finished_at, now()),
       name = COALESCE(NULLIF($11, ''), name), lang = COALESCE($12, lang), sid = COALESCE(sid, $13),
-      trainer_code = COALESCE(trainer_code, $14),
-      trainer_id = COALESCE(trainer_id, (SELECT id FROM trainers WHERE code = $14 AND active)),
+      -- свой тест тренера к его же ссылке не приписываем
+      trainer_code = CASE WHEN self_trainer_id IS NOT NULL THEN trainer_code ELSE COALESCE(trainer_code, $14) END,
+      trainer_id = CASE WHEN self_trainer_id IS NOT NULL THEN trainer_id ELSE COALESCE(trainer_id, (SELECT id FROM trainers WHERE code = $14 AND active)) END,
       utm = CASE WHEN utm = '{}'::jsonb THEN $15::jsonb ELSE utm END,
       referrer = COALESCE(referrer, $16), landing = COALESCE(landing, $17),
       updated_at = now()

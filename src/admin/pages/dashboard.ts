@@ -1,5 +1,6 @@
 import { adminGet, ApiError } from '../api'
-import { rangeParams, isAdmin } from '../state'
+import { rangeParams, isAdmin, META } from '../state'
+import { clientLinkCard, bindCopyButtons } from './profile'
 import { esc, fmtMoney, fmtNum, fmtPct } from '../format'
 import { kpiCard, kpiSkeleton } from '../components/kpi'
 import { timelineChart, sourcesChart, type Point } from '../components/charts'
@@ -34,6 +35,7 @@ export function funnelHtml(stages: { label: string; count: number }[]): string {
 
 export async function renderDashboard(page: HTMLElement) {
   page.innerHTML = `
+    ${!isAdmin() && META.trainer ? `<div class="section">${clientLinkCard(`${META.site}/t/${META.trainer.code}`, true)}</div>` : ''}
     <div class="section grid grid-kpi" id="kpis">${kpiSkeleton(6)}</div>
     <div class="section grid grid-2">
       <div class="card"><div class="card-head"><h2>Динамика</h2><span class="hint">открыли · начали · закончили · оплаты · выручка</span></div><div class="card-body"><div class="chart-wrap"><canvas id="c-timeline"></canvas></div></div></div>
@@ -44,6 +46,7 @@ export async function renderDashboard(page: HTMLElement) {
       <div class="card"><div class="card-head"><h2>Топ источников</h2></div><div class="card-body"><div class="chart-wrap"><canvas id="c-sources"></canvas></div></div></div>
     </div>
     ${isAdmin() ? `<div class="section"><div class="card"><div class="card-head"><h2>Тренеры</h2><a href="#/trainers" class="hint">все тренеры →</a></div><div class="card-body"><div class="table-wrap"><table class="tbl" id="tr-table"></table></div></div></div></div>` : ''}`
+  bindCopyButtons(page)
   const rp = rangeParams()
   try {
     const [ov, fn, tl, src, tr] = await Promise.all([
