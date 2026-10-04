@@ -271,3 +271,6 @@ textarea.input { min-height: 84px; resize: vertical; }
 .side-lang .lang-tg button { color: var(--a-side-text); }
 .side-lang .lang-tg button.active { color: #fff; }
 .login .lang-tg { align-self: flex-end; }
+
+/* текст доступа для тренера */
+.copy-pre { white-space: pre-wrap; word-break: break-word; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--a-surface-2); border: 1px solid var(--a-border); border-radius: 10px; padding: 12px; margin: 4px 0; }
