@@ -4,6 +4,7 @@ import { esc } from './format'
 import { renderRange } from './components/range'
 import { adminPost } from './api'
 import { navigate } from './router'
+import { toast } from './components/toast'
 import { META, isAdmin } from './state'
 import { L, langToggle, bindLangToggle } from './i18n'
 
@@ -31,7 +32,7 @@ export function renderShell(active: string, title: string, sub = '', withRange =
         <div class="side-brand"><span class="dot">🧠</span> ${brand}</div>
         ${nav.map(n => `<a href="${n.hash}" class="${isActive(n.match) ? 'active' : ''}"><span class="ic">${n.ic}</span>${n.label}</a>`).join('')}
         <div class="spacer"></div>
-        ${META.trainer ? `<a href="/t/${esc(META.trainer.code)}" target="_blank" rel="noopener"><span class="ic">🔗</span>${L('Моя ссылка', 'Менің сілтемем')}</a>` : ''}
+        ${META.trainer ? `<a href="#" id="copy-my-link" title="${L('Скопировать ссылку для клиентов', 'Клиенттерге арналған сілтемені көшіру')}"><span class="ic">🔗</span>${L('Моя ссылка', 'Менің сілтемем')}</a>` : ''}
         <a href="/" target="_blank" rel="noopener"><span class="ic">↗</span>${L('Открыть сайт', 'Сайтты ашу')}</a>
         ${isAdmin() ? '' : `<div class="side-lang">${langToggle()}</div>`}
         <button class="logout" data-logout>${L('Выйти', 'Шығу')}</button>
@@ -57,6 +58,12 @@ export function renderShell(active: string, title: string, sub = '', withRange =
     </div>`
   if (withRange) renderRange(app.querySelector('#range-slot')!)
   bindLangToggle(app)
+  // «Моя ссылка» только копирует ссылку: если тренер откроет её сам, его визит засчитается как визит клиента
+  app.querySelector('#copy-my-link')?.addEventListener('click', e => {
+    e.preventDefault()
+    const link = `${META.site || location.origin}/t/${META.trainer!.code}`
+    navigator.clipboard.writeText(link).then(() => toast(L('Ссылка скопирована', 'Сілтеме көшірілді') + ': ' + link))
+  })
   app.querySelectorAll('[data-logout]').forEach(b => b.addEventListener('click', async () => {
     await adminPost('logout').catch(() => {})
     navigate('#/login')
