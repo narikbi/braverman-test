@@ -15,8 +15,9 @@ export function tgWebhookSecret(): string {
 export const tgWebhookUrl = () => `${SITE()}/api/tg-webhook`
 
 export const BOT_COMMANDS = [
-  { command: 'report', description: 'Сводка: сегодня, 7 и 30 дней, всё время' },
+  { command: 'report', description: 'Сводка: сегодня, вчера, 7 и 30 дней, всё время' },
   { command: 'today', description: 'Отчёт за сегодня' },
+  { command: 'yesterday', description: 'Отчёт за вчера' },
   { command: 'week', description: 'Отчёт за 7 дней' },
   { command: 'month', description: 'Отчёт за 30 дней' },
   { command: 'all', description: 'Отчёт за всё время' },
@@ -65,19 +66,19 @@ function delta(cur: number, prev: number): string {
   return ` <i>(было ${num(prev)}, ${d > 0 ? '▲ +' : d < 0 ? '▼ ' : '= '}${d}%)</i>`
 }
 
-type Preset = 'today' | '7d' | '30d' | 'all'
-const PERIOD_NAME: Record<Preset, string> = { today: 'сегодня', '7d': '7 дней', '30d': '30 дней', all: 'всё время' }
+type Preset = 'today' | 'yesterday' | '7d' | '30d' | 'all'
+const PERIOD_NAME: Record<Preset, string> = { today: 'сегодня', yesterday: 'вчера', '7d': '7 дней', '30d': '30 дней', all: 'всё время' }
 
 function periodDates(p: Preset, from: Date, to: Date): string {
   if (p === 'all') return 'с начала работы'
   const last = new Date(to.getTime() - 1)
-  return p === 'today' ? dm(from) : `${dm(from)} – ${dm(last)}`
+  return p === 'today' || p === 'yesterday' ? dm(from) : `${dm(from)} – ${dm(last)}`
 }
 
 export const KEYBOARD = {
   inline_keyboard: [
-    [{ text: 'Сегодня', callback_data: 'r:today' }, { text: '7 дней', callback_data: 'r:7d' }],
-    [{ text: '30 дней', callback_data: 'r:30d' }, { text: 'Всё время', callback_data: 'r:all' }],
+    [{ text: 'Сегодня', callback_data: 'r:today' }, { text: 'Вчера', callback_data: 'r:yesterday' }],
+    [{ text: '7 дней', callback_data: 'r:7d' }, { text: '30 дней', callback_data: 'r:30d' }, { text: 'Всё время', callback_data: 'r:all' }],
     [{ text: 'Последние оплаты', callback_data: 'pay' }, { text: 'Тренеры', callback_data: 'tr' }]
   ]
 }
@@ -85,7 +86,7 @@ export const KEYBOARD = {
 // ── отчёты ──
 /** /report — сводная таблица по четырём периодам */
 export async function summaryReport(): Promise<string> {
-  const presets: Preset[] = ['today', '7d', '30d', 'all']
+  const presets: Preset[] = ['today', 'yesterday', '7d', '30d', 'all']
   const rows = await Promise.all(presets.map(async p => { const r = rangeFor(p); return { p, k: await kpi(r.from, r.to, ALL) } }))
   const pad = (s: string, n: number, left = false) => (left ? s.padStart(n) : s.padEnd(n))
   const lines = rows.map(({ p, k }) => `${pad(PERIOD_NAME[p][0].toUpperCase() + PERIOD_NAME[p].slice(1), 10)}${pad(String(k.paid), 6, true)}${pad(money(k.revenue), 13, true)}`)

@@ -22,6 +22,7 @@ const COMMANDS: Record<string, () => Promise<string>> = {
   report: summaryReport,
   start: summaryReport,
   today: () => periodReport('today'),
+  yesterday: () => periodReport('yesterday'),
   week: () => periodReport('7d'),
   month: () => periodReport('30d'),
   all: () => periodReport('all'),
@@ -31,6 +32,7 @@ const COMMANDS: Record<string, () => Promise<string>> = {
 }
 const BUTTONS: Record<string, () => Promise<string>> = {
   'r:today': () => periodReport('today'),
+  'r:yesterday': () => periodReport('yesterday'),
   'r:7d': () => periodReport('7d'),
   'r:30d': () => periodReport('30d'),
   'r:all': () => periodReport('all'),

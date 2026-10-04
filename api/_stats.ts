@@ -5,7 +5,7 @@ import { q } from './_db.js'
 export const TZ = '+05:00' // Asia/Almaty, без перехода на летнее время
 
 // ── период ──
-export type RangePreset = 'today' | '7d' | '30d' | 'all' | 'custom'
+export type RangePreset = 'today' | 'yesterday' | '7d' | '30d' | 'all' | 'custom'
 export type Range = { from: Date; to: Date; prevFrom: Date; prevTo: Date; bucket: 'hour' | 'day'; label: string }
 
 export function almatyDate(d: Date): string {
@@ -20,6 +20,9 @@ export function rangeFor(preset: string, customFrom?: string | null, customTo?: 
   if (preset === 'custom' && /^\d{4}-\d{2}-\d{2}$/.test(customFrom || '') && /^\d{4}-\d{2}-\d{2}$/.test(customTo || '')) {
     from = day(customFrom!)
     to = day(customTo!, 1)
+  } else if (preset === 'yesterday') {
+    from = day(today, -1)
+    to = day(today)
   } else if (preset === 'today') {
     from = day(today)
     to = day(today, 1)
