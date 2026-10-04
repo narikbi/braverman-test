@@ -1,12 +1,12 @@
 import { esc, fmtDelta } from '../format'
 
-export function kpiCard(label: string, value: string, cur: number, prev: number, sub = ''): string {
+export function kpiCard(label: string, value: string, cur: number, prev: number, sub = '', showDelta = true): string {
   const d = fmtDelta(cur, prev)
   const arrow = d.dir === 'up' ? '↑' : d.dir === 'down' ? '↓' : '·'
   return `<div class="card kpi">
     <div class="label">${esc(label)}</div>
     <div class="value">${esc(value)}</div>
-    <span class="delta ${d.dir}">${arrow} ${esc(d.text)}</span>
+    ${showDelta ? `<span class="delta ${d.dir}">${arrow} ${esc(d.text)}</span>` : ''}
     ${sub ? `<div class="sub">${esc(sub)}</div>` : ''}
   </div>`
 }

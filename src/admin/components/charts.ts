@@ -17,7 +17,8 @@ function mount(canvas: HTMLCanvasElement, cfg: ChartConfiguration) {
 
 export type Point = { t: string; views: number; started: number; finished: number; paid: number; revenue: number }
 
-export function timelineChart(canvas: HTMLCanvasElement, points: Point[], bucket: 'hour' | 'day') {
+/** withMoney = false — для тренера: без линии выручки, «оплаты» подписаны как «получили результат». */
+export function timelineChart(canvas: HTMLCanvasElement, points: Point[], bucket: 'hour' | 'day', withMoney = true) {
   const labels = points.map(p => bucketLabel(p.t, bucket))
   mount(canvas, {
     type: 'line',
@@ -27,8 +28,8 @@ export function timelineChart(canvas: HTMLCanvasElement, points: Point[], bucket
         { label: L('Открыли сайт', 'Сайтты ашты'), data: points.map(p => p.views), borderColor: '#94a3b8', backgroundColor: 'rgba(148,163,184,.12)', fill: true, tension: 0.35, pointRadius: 2, yAxisID: 'y' },
         { label: L('Начали', 'Бастады'), data: points.map(p => p.started), borderColor: '#2f5cff', backgroundColor: 'rgba(47,92,255,.10)', fill: true, tension: 0.35, pointRadius: 2, yAxisID: 'y' },
         { label: L('Закончили', 'Аяқтады'), data: points.map(p => p.finished), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,.10)', fill: true, tension: 0.35, pointRadius: 2, yAxisID: 'y' },
-        { label: L('Оплаты', 'Төледі'), data: points.map(p => p.paid), borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.15)', fill: true, tension: 0.35, pointRadius: 3, yAxisID: 'y' },
-        { label: L('Выручка, ₸', 'Түсім, ₸'), data: points.map(p => p.revenue), borderColor: '#7c3aed', borderDash: [4, 4], tension: 0.35, pointRadius: 0, yAxisID: 'y2' }
+        { label: withMoney ? L('Оплаты', 'Төледі') : L('Получили результат', 'Нәтижесін алды'), data: points.map(p => p.paid), borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.15)', fill: true, tension: 0.35, pointRadius: 3, yAxisID: 'y' },
+        ...(withMoney ? [{ label: L('Выручка, ₸', 'Түсім, ₸'), data: points.map(p => p.revenue), borderColor: '#7c3aed', borderDash: [4, 4], tension: 0.35, pointRadius: 0, yAxisID: 'y2' }] : [])
       ]
     },
     options: {
@@ -36,14 +37,14 @@ export function timelineChart(canvas: HTMLCanvasElement, points: Point[], bucket
       plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } } },
       scales: {
         y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#eef0f6' } },
-        y2: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: v => `${Number(v).toLocaleString('ru-RU')}` } },
+        y2: { display: withMoney, beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: v => `${Number(v).toLocaleString('ru-RU')}` } },
         x: { grid: { display: false } }
       }
     }
   })
 }
 
-export function sourcesChart(canvas: HTMLCanvasElement, rows: { source: string; views: number; finished: number; paid: number }[]) {
+export function sourcesChart(canvas: HTMLCanvasElement, rows: { source: string; views: number; finished: number; paid: number }[], withMoney = true) {
   const top = rows.slice(0, 8)
   mount(canvas, {
     type: 'bar',
@@ -52,7 +53,7 @@ export function sourcesChart(canvas: HTMLCanvasElement, rows: { source: string; 
       datasets: [
         { label: L('Открыли', 'Ашты'), data: top.map(r => r.views), backgroundColor: '#cbd5e1', borderRadius: 6 },
         { label: L('Закончили', 'Аяқтады'), data: top.map(r => r.finished), backgroundColor: '#2f5cff', borderRadius: 6 },
-        { label: L('Оплатили', 'Төледі'), data: top.map(r => r.paid), backgroundColor: '#16a34a', borderRadius: 6 }
+        { label: withMoney ? L('Оплатили', 'Төледі') : L('Получили результат', 'Нәтижесін алды'), data: top.map(r => r.paid), backgroundColor: '#16a34a', borderRadius: 6 }
       ]
     },
     options: {

@@ -7,7 +7,7 @@ import { timelineChart, sourcesChart, type Point } from '../components/charts'
 import { dbMissing } from './shared'
 import { L, funnelLabel } from '../i18n'
 
-export type Kpi = { visits: number; started: number; finished: number; checkouts: number; invoices: number; paid: number; revenue: number; results: number; convVisitPaid: number; convFinishPaid: number; convStartFinish: number }
+export type Kpi = { visits: number; started: number; finished: number; checkouts: number; invoices: number; paid: number; revenue: number; results: number; convVisitPaid: number; convFinishPaid: number; convStartFinish: number; awaiting?: number }
 type Overview = { kpi: Kpi; prev: Kpi; range: { bucket: 'hour' | 'day' } }
 type Funnel = { stages: { key: string; label: string; count: number }[] }
 type Timeline = { bucket: 'hour' | 'day'; points: Point[] }
@@ -25,6 +25,19 @@ export function kpiCards(k: Kpi, p: Kpi): string {
   ].join('')
 }
 
+/** KPI тренера: без денег — сколько людей пришло, прошло тест, получило результат и кто ждёт оплаты. */
+export function trainerKpiCards(k: Kpi, p: Kpi): string {
+  const pct = (a: number, b: number) => (b ? fmtPct((a / b) * 100, 0) : '0%')
+  return [
+    kpiCard(L('Открыли ссылку', 'Сілтемені ашты'), fmtNum(k.visits), k.visits, p.visits, L('сколько людей открыли вашу ссылку', 'сілтемеңізді қанша адам ашты')),
+    kpiCard(L('Начали тест', 'Тестті бастады'), fmtNum(k.started), k.started, p.started, L(`${pct(k.started, k.visits)} из открывших`, `ашқандардың ${pct(k.started, k.visits)}-ы бастады`)),
+    kpiCard(L('Прошли тест', 'Тестті аяқтады'), fmtNum(k.finished), k.finished, p.finished, L(`${pct(k.finished, k.started)} из начавших`, `бастағандардың ${pct(k.finished, k.started)}-ы аяқтады`)),
+    kpiCard(L('Получили результат', 'Нәтижесін алды'), fmtNum(k.paid), k.paid, p.paid, L(`${pct(k.paid, k.finished)} из прошедших`, `аяқтағандардың ${pct(k.paid, k.finished)}-ы нәтижесін алды`)),
+    kpiCard(L('Ждут оплаты', 'Төлемін күтіп тұр'), fmtNum(k.awaiting ?? 0), k.awaiting ?? 0, p.awaiting ?? 0, L('прошли тест, но не оплатили — напомните им', 'тестті өтті, бірақ төлемеді — оларға еске салыңыз'), false),
+    kpiCard(L('Открыли результат', 'Нәтижесін ашты'), fmtNum(k.results), k.results, p.results, L('сколько раз смотрели результат и видео', 'нәтиже мен видеоны қанша адам ашты'))
+  ].join('')
+}
+
 export function funnelHtml(stages: { key?: string; label: string; count: number }[]): string {
   const max = Math.max(1, ...stages.map(s => s.count))
   return stages.map((s, i) => {
@@ -39,7 +52,7 @@ export async function renderDashboard(page: HTMLElement) {
     ${!isAdmin() && META.trainer ? `<div class="section">${clientLinkCard(`${META.site}/t/${META.trainer.code}`, true)}</div>` : ''}
     <div class="section grid grid-kpi" id="kpis">${kpiSkeleton(6)}</div>
     <div class="section grid grid-2">
-      <div class="card"><div class="card-head"><h2>${L('Динамика', 'Күн сайын қалай өзгерді')}</h2><span class="hint">${L('открыли · начали · закончили · оплаты · выручка', 'ашты · бастады · аяқтады · төледі · түсім')}</span></div><div class="card-body"><div class="chart-wrap"><canvas id="c-timeline"></canvas></div></div></div>
+      <div class="card"><div class="card-head"><h2>${L('Динамика', 'Күн сайын қалай өзгерді')}</h2><span class="hint">${isAdmin() ? 'открыли · начали · закончили · оплаты · выручка' : L('открыли · начали · закончили · получили результат', 'ашты · бастады · аяқтады · нәтижесін алды')}</span></div><div class="card-body"><div class="chart-wrap"><canvas id="c-timeline"></canvas></div></div></div>
       <div class="card"><div class="card-head"><h2>${L('Воронка', 'Клиенттер қай қадамға дейін жетті')}</h2><span class="hint">${L('уникальные сессии', 'әр адам бір рет саналады')}</span></div><div class="card-body"><div class="funnel" id="funnel"></div></div></div>
     </div>
     <div class="section grid grid-2">
@@ -54,13 +67,14 @@ export async function renderDashboard(page: HTMLElement) {
       adminGet<Overview>('overview', rp), adminGet<Funnel>('funnel', rp), adminGet<Timeline>('timeline', rp), adminGet<Sources>('sources', rp),
       isAdmin() ? adminGet<TrainersStats>('trainers-stats', rp) : Promise.resolve(null)
     ])
-    page.querySelector('#kpis')!.innerHTML = kpiCards(ov.kpi, ov.prev)
-    page.querySelector('#funnel')!.innerHTML = funnelHtml(fn.stages)
-    timelineChart(page.querySelector('#c-timeline')!, tl.points, tl.bucket)
-    sourcesChart(page.querySelector('#c-sources')!, src.rows)
+    page.querySelector('#kpis')!.innerHTML = isAdmin() ? kpiCards(ov.kpi, ov.prev) : trainerKpiCards(ov.kpi, ov.prev)
+    // у тренера шаг «оплатили» называем «получили результат» — деньги ему не показываем
+    page.querySelector('#funnel')!.innerHTML = funnelHtml(isAdmin() ? fn.stages : fn.stages.map(s => s.key === 'paid' ? { ...s, key: undefined, label: L('Получили результат', 'Нәтижесін алды') } : s))
+    timelineChart(page.querySelector('#c-timeline')!, tl.points, tl.bucket, isAdmin())
+    sourcesChart(page.querySelector('#c-sources')!, src.rows, isAdmin())
     page.querySelector('#src-table')!.innerHTML = `
-      <thead><tr><th>${L('Источник', 'Қайдан')}</th><th>${L('Кампания', 'Науқан')}</th><th class="num">${L('Открыли', 'Ашты')}</th><th class="num">${L('Начали', 'Бастады')}</th><th class="num">${L('Закончили', 'Аяқтады')}</th><th class="num">${L('Оплаты', 'Төледі')}</th><th class="num">${L('Выручка', 'Түсім')}</th></tr></thead>
-      <tbody>${src.rows.length ? src.rows.map(r => `<tr><td><b>${esc(r.source)}</b>${r.medium ? ` <span class="chip">${esc(r.medium)}</span>` : ''}</td><td class="muted">${esc(r.campaign || '—')}${r.content ? ` · ${esc(r.content)}` : ''}</td><td class="num">${fmtNum(r.views)}</td><td class="num">${fmtNum(r.started)}</td><td class="num">${fmtNum(r.finished)}</td><td class="num"><b>${fmtNum(r.paid)}</b></td><td class="num">${fmtMoney(r.revenue)}</td></tr>`).join('') : `<tr><td colspan="7"><div class="empty">${L('Нет данных за период', 'Бұл кезеңде әзірге ешкім келмеді')}</div></td></tr>`}</tbody>`
+      <thead><tr><th>${L('Источник', 'Қайдан')}</th><th>${L('Кампания', 'Науқан')}</th><th class="num">${L('Открыли', 'Ашты')}</th><th class="num">${L('Начали', 'Бастады')}</th><th class="num">${L('Закончили', 'Аяқтады')}</th><th class="num">${isAdmin() ? 'Оплаты' : L('Получили результат', 'Нәтижесін алды')}</th>${isAdmin() ? '<th class="num">Выручка</th>' : ''}</tr></thead>
+      <tbody>${src.rows.length ? src.rows.map(r => `<tr><td><b>${esc(r.source)}</b>${r.medium ? ` <span class="chip">${esc(r.medium)}</span>` : ''}</td><td class="muted">${esc(r.campaign || '—')}${r.content ? ` · ${esc(r.content)}` : ''}</td><td class="num">${fmtNum(r.views)}</td><td class="num">${fmtNum(r.started)}</td><td class="num">${fmtNum(r.finished)}</td><td class="num"><b>${fmtNum(r.paid)}</b></td>${isAdmin() ? `<td class="num">${fmtMoney(r.revenue)}</td>` : ''}</tr>`).join('') : `<tr><td colspan="7"><div class="empty">${L('Нет данных за период', 'Бұл кезеңде әзірге ешкім келмеді')}</div></td></tr>`}</tbody>`
     if (tr) {
       const rows = tr.rows.filter(t => t.visits || t.started || t.paid).slice(0, 10)
       page.querySelector('#tr-table')!.innerHTML = `

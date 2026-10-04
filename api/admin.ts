@@ -160,6 +160,7 @@ export default async function handler(req: Req, res: Res) {
 
   if (action === 'overview') {
     const [cur, prev] = await Promise.all([kpi(r.from, r.to, scope), kpi(r.prevFrom, r.prevTo, scope)])
+    if (!isAdmin) { cur.revenue = 0; prev.revenue = 0 } // тренеру выручка не нужна — только вовлечённость клиентов
     return res.status(200).json({ ok: true, range: { from: r.from, to: r.to, bucket: r.bucket, label: r.label }, kpi: cur, prev })
   }
 
@@ -179,12 +180,13 @@ export default async function handler(req: Req, res: Res) {
       FROM events WHERE ts >= $1 AND ts < $2 AND ($4::text IS NULL OR trainer_code = $4) GROUP BY 1 ORDER BY 1`, [r.from, r.to, r.bucket, scope.trainerCode])
     return res.status(200).json({
       ok: true, bucket: r.bucket, from: r.from, to: r.to,
-      points: rows.map(x => ({ t: x.t, views: +x.views, started: +x.started, finished: +x.finished, paid: +x.paid, revenue: +x.revenue }))
+      points: rows.map(x => ({ t: x.t, views: +x.views, started: +x.started, finished: +x.finished, paid: +x.paid, revenue: isAdmin ? +x.revenue : 0 }))
     })
   }
 
   if (action === 'sources') {
-    return res.status(200).json({ ok: true, rows: await sourcesStats(r.from, r.to, scope.trainerCode) })
+    const rows = await sourcesStats(r.from, r.to, scope.trainerCode)
+    return res.status(200).json({ ok: true, rows: isAdmin ? rows : rows.map(x => ({ ...x, revenue: 0 })) })
   }
 
   if (action === 'trainers-stats') {

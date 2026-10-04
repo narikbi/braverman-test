@@ -69,9 +69,10 @@ export async function kpi(from: Date, to: Date, s: Scope) {
       SELECT COALESCE(sum(p.amount), 0) AS revenue, count(*) AS paid FROM payments p
       LEFT JOIN attempts a ON a.id = p.attempt_id
       WHERE p.status = 'paid' AND p.paid_at >= $1 AND p.paid_at < $2 AND ($3::text IS NULL OR a.trainer_code = $3)`, [from, to, s.trainerCode]),
-    q<{ started: string; finished: string }>('kpi_attempts', `
+    q<{ started: string; finished: string; awaiting: string }>('kpi_attempts', `
       SELECT count(*) FILTER (WHERE created_at >= $1 AND created_at < $2) AS started,
-             count(*) FILTER (WHERE finished_at >= $1 AND finished_at < $2) AS finished
+             count(*) FILTER (WHERE finished_at >= $1 AND finished_at < $2) AS finished,
+             count(*) FILTER (WHERE finished_at >= $1 AND finished_at < $2 AND status <> 'paid') AS awaiting
       FROM attempts WHERE ($3::text IS NULL OR trainer_code = $3)`, [from, to, s.trainerCode])
   ])
   const paid = Number(rev[0]?.paid ?? 0)
@@ -80,6 +81,7 @@ export async function kpi(from: Date, to: Date, s: Scope) {
   return {
     visits: f.page_view, started, finished, checkouts: f.checkout_view, invoices: f.invoice_created,
     paid, revenue: Number(rev[0]?.revenue ?? 0), results: f.result_view,
+    awaiting: Number(att[0]?.awaiting ?? 0), // прошли тест, но ещё не оплатили — тренер может напомнить
     convVisitPaid: f.page_view ? +((paid / f.page_view) * 100).toFixed(2) : 0,
     convFinishPaid: finished ? +((paid / finished) * 100).toFixed(1) : 0,
     convStartFinish: started ? +((finished / started) * 100).toFixed(1) : 0
