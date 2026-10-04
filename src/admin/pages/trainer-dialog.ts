@@ -1,5 +1,5 @@
 // Диалог «Добавить / редактировать тренера»: имя, код ссылки, телефон, кабинет (логин + пароль), заметки.
-import { adminPost, ApiError } from '../api'
+import { adminGet, adminPost, ApiError } from '../api'
 import { esc } from '../format'
 import { toast } from '../components/toast'
 import { META } from '../state'
@@ -16,7 +16,7 @@ export function openTrainerDialog(t: TrainerRow | null, onDone: () => void) {
     <div class="drawer-head"><h2>${t ? 'Тренер' : 'Новый тренер'}</h2><button class="close" id="t-close">×</button></div>
     <div class="drawer-body">
       <div>${lbl('Имя')}<input class="input" id="t-name" value="${esc(t?.name || '')}" placeholder="Айгерім Сериккызы" /></div>
-      <div>${lbl('Код ссылки')}<input class="input" id="t-code" value="${esc(t?.code || '')}" placeholder="aigerim" /><div class="muted" style="font-size:12px;margin-top:4px">Ссылка: <code id="t-link">${esc(META.site)}/t/${esc(t?.code || '…')}</code></div></div>
+      <div>${lbl('Код ссылки')}<input class="input" id="t-code" value="${esc(t?.code || '')}" placeholder="aigerim" /><div class="muted" style="font-size:12px;margin-top:4px">Ссылка: <code id="t-link">${esc(META.site)}/t/${esc(t?.code || '…')}</code>${t ? '' : ' · код и логин заполняются из имени, можно изменить'}</div></div>
       <div>${lbl('Телефон')}<input class="input" id="t-phone" type="tel" value="${esc(t?.phone || '')}" placeholder="+7 7__ ___ __ __" /></div>
       <div class="card" style="box-shadow:none"><div class="card-head"><h2>Кабинет тренера</h2></div><div class="card-body" style="display:flex;flex-direction:column;gap:10px">
         <div class="muted" style="font-size:12.5px">Тренер входит на <code>${esc(META.site)}/admin</code> и видит только своих клиентов.</div>
@@ -34,7 +34,24 @@ export function openTrainerDialog(t: TrainerRow | null, onDone: () => void) {
   bg.addEventListener('click', close)
   dr.querySelector('#t-close')!.addEventListener('click', close)
   const v = (id: string) => (dr.querySelector(id) as HTMLInputElement).value
-  dr.querySelector('#t-code')!.addEventListener('input', () => { dr.querySelector('#t-link')!.textContent = `${META.site}/t/${v('#t-code').trim().toLowerCase() || '…'}` })
+  const showLink = () => { dr.querySelector('#t-link')!.textContent = `${META.site}/t/${v('#t-code').trim().toLowerCase() || '…'}` }
+  // ручная правка кода/логина отключает автозаполнение этого поля
+  let codeTouched = !!t, loginTouched = !!t
+  dr.querySelector('#t-code')!.addEventListener('input', () => { codeTouched = true; showLink() })
+  dr.querySelector('#t-login')!.addEventListener('input', () => { loginTouched = true })
+
+  // Новый тренер: код ссылки и логин из имени латиницей, с учётом уже занятых
+  if (!t) {
+    const taken = { codes: new Set<string>(), logins: new Set<string>() }
+    adminGet<{ items: TrainerRow[] }>('trainers').then(r => {
+      r.items.forEach(x => { taken.codes.add(x.code); if (x.login) taken.logins.add(x.login) })
+    }).catch(() => {})
+    dr.querySelector('#t-name')!.addEventListener('input', () => {
+      const name = v('#t-name')
+      if (!codeTouched) { (dr.querySelector('#t-code') as HTMLInputElement).value = suggestSlug(name, taken.codes, 2); showLink() }
+      if (!loginTouched) (dr.querySelector('#t-login') as HTMLInputElement).value = suggestSlug(name, taken.logins, 3)
+    })
+  }
   const err = dr.querySelector<HTMLElement>('#t-err')!
 
   dr.querySelector('#t-gen')!.addEventListener('click', () => {
@@ -114,4 +131,28 @@ function accessText(a: { code: string; login: string; pass: string }): string {
     `Здравствуйте! Доступ в кабинет тренера Braverman:\n` +
     `Сайт: ${site}/admin\nЛогин: ${a.login}\nПароль: ${a.pass}\n` +
     `Ваша ссылка для клиентов: ${site}/t/${a.code}`
+}
+
+// Транслит казахского/русского имени в латиницу для кода ссылки и логина: «Айгерім» → aigerim, «Жеңіс» → zhenis.
+const TRANSLIT: Record<string, string> = {
+  а: 'a', ә: 'a', б: 'b', в: 'v', г: 'g', ғ: 'g', д: 'd', е: 'e', ё: 'yo', ж: 'zh', з: 'z', и: 'i', й: 'i', і: 'i',
+  к: 'k', қ: 'k', л: 'l', м: 'm', н: 'n', ң: 'n', о: 'o', ө: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ұ: 'u', ү: 'u',
+  ф: 'f', х: 'kh', һ: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya'
+}
+export function translit(s: string): string {
+  return [...s.toLowerCase()].map(c => TRANSLIT[c] ?? c).join('').replace(/[^a-z0-9]/g, '')
+}
+
+/** Свободный код/логин из имени: aigerim → aigerim-s (буква фамилии) → aigerim2, aigerim3… */
+export function suggestSlug(name: string, taken: Set<string>, minLen: number): string {
+  const words = name.trim().split(/\s+/).map(translit).filter(Boolean)
+  if (!words.length) return ''
+  let base = words[0].slice(0, 24)
+  if (base.length < minLen) base = words.join('').slice(0, 24) // короткое имя (Ли) — берём с фамилией
+  if (base.length < minLen) base = base.padEnd(minLen, '1')
+  const candidates = [base]
+  if (words[1]) candidates.push(`${base}-${words[1][0]}`)
+  for (const c of candidates) if (!taken.has(c)) return c
+  for (let n = 2; n < 100; n++) if (!taken.has(`${base}${n}`)) return `${base}${n}`
+  return `${base}${Date.now() % 1000}`
 }
