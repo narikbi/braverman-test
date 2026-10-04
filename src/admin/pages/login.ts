@@ -35,7 +35,6 @@ export function renderLogin() {
       <form class="card login" id="login-form" autocomplete="on">
         ${langToggle()}
         <div class="brand"><span class="dot">🧠</span> Braverman · ${L('вход', 'кіру')}</div>
-        <div class="muted" style="font-size:12.5px;margin-top:-6px">${L('Админ или тренер — один и тот же вход', 'Админ де, тренер де осы жерден кіреді')}</div>
         <div>
           <label for="lg" id="lg-label"></label>
           <input class="input" id="lg" autofocus />
