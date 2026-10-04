@@ -1,13 +1,15 @@
 import { getRange, setRange, type RangePreset } from '../state'
+import { L } from '../i18n'
 
-const PRESETS: { key: RangePreset; label: string }[] = [
-  { key: 'today', label: 'Сегодня' }, { key: '7d', label: '7 дней' }, { key: '30d', label: '30 дней' }, { key: 'all', label: 'Всё время' }, { key: 'custom', label: 'Период' }
+const presets = (): { key: RangePreset; label: string }[] => [
+  { key: 'today', label: L('Сегодня', 'Бүгін') }, { key: '7d', label: L('7 дней', '7 күн') }, { key: '30d', label: L('30 дней', '30 күн') },
+  { key: 'all', label: L('Всё время', 'Барлық уақыт') }, { key: 'custom', label: L('Период', 'Кезең') }
 ]
 
 export function renderRange(slot: HTMLElement) {
   const r = getRange()
   slot.innerHTML = `<div class="range">
-    ${PRESETS.map(p => `<button data-p="${p.key}" class="${r.preset === p.key ? 'active' : ''}">${p.label}</button>`).join('')}
+    ${presets().map(p => `<button data-p="${p.key}" class="${r.preset === p.key ? 'active' : ''}">${p.label}</button>`).join('')}
     <div class="custom" ${r.preset === 'custom' ? '' : 'hidden'}>
       <input type="date" id="r-from" value="${r.from || ''}" /> — <input type="date" id="r-to" value="${r.to || ''}" />
     </div>

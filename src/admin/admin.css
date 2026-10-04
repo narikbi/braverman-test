@@ -261,3 +261,13 @@ textarea.input { min-height: 84px; resize: vertical; }
 /* заблокированность отделов */
 .chip-warn { background: #FFF1DB; color: #9A5B00; border-color: #F4C27A; }
 .warn-box { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: #FFF9EF; border: 1px solid #F4C27A; font-size: 13.5px; color: #5B5140; }
+
+/* переключатель языка кабинета (Рус / Қаз) */
+.lang-tg { display: inline-flex; border: 1px solid var(--a-border); border-radius: 9px; padding: 2px; gap: 2px; background: var(--a-surface); }
+.lang-tg button { font: inherit; font-size: 12.5px; font-weight: 700; border: 0; background: none; color: var(--a-text-2); padding: 4px 9px; border-radius: 7px; cursor: pointer; }
+.lang-tg button.active { background: var(--a-accent); color: #fff; }
+.side-lang { padding: 6px 4px; }
+.side-lang .lang-tg { background: transparent; border-color: var(--a-side-2); }
+.side-lang .lang-tg button { color: var(--a-side-text); }
+.side-lang .lang-tg button.active { color: #fff; }
+.login .lang-tg { align-self: flex-end; }

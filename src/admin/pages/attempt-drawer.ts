@@ -6,6 +6,7 @@ import { toast } from '../components/toast'
 import { badge } from './attempts'
 import { CONTENT, type Lang } from '../../content'
 import { fmtBlocked } from '../format'
+import { L, eventLabel } from '../i18n'
 import { inviteText } from './prepaid-dialog'
 import { NEURO_ORDER, neuroAt, questionIndexAt, QUESTIONS_PER_BLOCK } from '../../../shared/scoring'
 
@@ -24,7 +25,7 @@ type Detail = { attempt: Attempt; payments: Payment[]; events: Ev[]; trainer: { 
 export async function openAttemptDrawer(id: number, onClose: () => void) {
   const bg = document.createElement('div'); bg.className = 'drawer-bg'
   const dr = document.createElement('div'); dr.className = 'drawer'
-  dr.innerHTML = `<div class="drawer-head"><h2>Прохождение #${id}</h2><button class="close" id="dr-close">×</button></div><div class="drawer-body"><div class="skel" style="height:60px"></div><div class="skel"></div><div class="skel" style="width:70%"></div></div>`
+  dr.innerHTML = `<div class="drawer-head"><h2>${L(`Прохождение #${id}`, `Тест №${id}`)}</h2><button class="close" id="dr-close">×</button></div><div class="drawer-body"><div class="skel" style="height:60px"></div><div class="skel"></div><div class="skel" style="width:70%"></div></div>`
   document.body.append(bg, dr)
   requestAnimationFrame(() => { bg.classList.add('show'); dr.classList.add('show') })
   const close = () => { bg.classList.remove('show'); dr.classList.remove('show'); setTimeout(() => { bg.remove(); dr.remove() }, 250); onClose() }
@@ -34,7 +35,7 @@ export async function openAttemptDrawer(id: number, onClose: () => void) {
   document.addEventListener('keydown', esc_)
 
   let d: Detail
-  try { d = await adminGet<Detail>('attempt', { id }) } catch { dr.querySelector('.drawer-body')!.innerHTML = `<div class="empty">Прохождение не найдено</div>`; return }
+  try { d = await adminGet<Detail>('attempt', { id }) } catch { dr.querySelector('.drawer-body')!.innerHTML = `<div class="empty">${L('Прохождение не найдено', 'Бұл тест табылмады')}</div>`; return }
   const a = d.attempt
   const body = dr.querySelector<HTMLElement>('.drawer-body')!
   const max = QUESTIONS_PER_BLOCK
@@ -43,25 +44,25 @@ export async function openAttemptDrawer(id: number, onClose: () => void) {
 
   body.innerHTML = `
     <div>
-      <div style="font-size:20px;font-weight:800">${esc(a.name || 'Без имени')}</div>
-      <div class="row-actions" style="margin-top:6px">${badge(a.status)}${a.status === 'started' ? `<span class="chip">${a.answered}/200</span>` : ''}${a.test_amount ? '<span class="chip">тестовый счёт</span>' : ''}${a.paid_by === 'admin' ? '<span class="chip">выдано вручную</span>' : ''}${a.paid_by === 'prepaid' ? '<span class="chip">оплата вне сайта</span>' : ''}${a.paid_by === 'retake' ? '<span class="chip">пересдача</span>' : ''}${a.paid_by === 'trainer' ? '<span class="chip">свой тест тренера</span>' : ''}
-        ${digits && !a.phone!.includes('•') ? `<a class="btn btn-sm" href="https://wa.me/${digits}" target="_blank" rel="noopener">WhatsApp</a><a class="btn btn-sm" href="tel:+${digits}">Позвонить</a>` : ''}</div>
+      <div style="font-size:20px;font-weight:800">${esc(a.name || L('Без имени', 'Аты жазылмаған'))}</div>
+      <div class="row-actions" style="margin-top:6px">${badge(a.status)}${a.status === 'started' ? `<span class="chip">${a.answered}/200</span>` : ''}${a.test_amount ? '<span class="chip">тестовый счёт</span>' : ''}${a.paid_by === 'admin' ? '<span class="chip">выдано вручную</span>' : ''}${a.paid_by === 'prepaid' ? '<span class="chip">оплата вне сайта</span>' : ''}${a.paid_by === 'retake' ? `<span class="chip">${L('пересдача', 'қайта өтті')}</span>` : ''}${a.paid_by === 'trainer' ? '<span class="chip">свой тест тренера</span>' : ''}
+        ${digits && !a.phone!.includes('•') ? `<a class="btn btn-sm" href="https://wa.me/${digits}" target="_blank" rel="noopener">WhatsApp</a><a class="btn btn-sm" href="tel:+${digits}">${L('Позвонить', 'Қоңырау шалу')}</a>` : ''}</div>
     </div>
     <div class="kv">
-      <span class="k">Телефон</span><span class="v">${fmtPhone(a.phone)}</span>
-      <span class="k">Язык</span><span class="v">${fmtLang(a.lang)}</span>
-      <span class="k">Тренер</span><span class="v">${d.trainer ? `<a href="#/trainers/${d.trainer.id}">${esc(d.trainer.name)}</a> <span class="muted">(${esc(d.trainer.code)})</span>` : a.trainer_code ? `<span class="muted">неизвестный код: ${esc(a.trainer_code)}</span>` : '—'}</span>
-      <span class="k">Источник</span><span class="v">${esc(a.utm?.utm_source || '(прямой)')}${a.utm?.utm_medium ? ` · ${esc(a.utm.utm_medium)}` : ''}${a.utm?.utm_campaign ? ` · ${esc(a.utm.utm_campaign)}` : ''}${a.utm?.utm_content ? ` · ${esc(a.utm.utm_content)}` : ''}</span>
-      ${a.referrer ? `<span class="k">Реферер</span><span class="v muted" style="word-break:break-all">${esc(a.referrer)}</span>` : ''}
-      ${a.landing ? `<span class="k">Лендинг</span><span class="v muted" style="word-break:break-all">${esc(a.landing)}</span>` : ''}
-      <span class="k">Начал</span><span class="v">${fmtDateFull(a.created_at)}</span>
-      <span class="k">Закончил</span><span class="v">${fmtDateFull(a.finished_at)}</span>
-      <span class="k">Чекаут</span><span class="v">${fmtDateFull(a.checkout_at)}</span>
+      <span class="k">${L('Телефон', 'Телефоны')}</span><span class="v">${fmtPhone(a.phone)}</span>
+      <span class="k">${L('Язык', 'Тест тілі')}</span><span class="v">${fmtLang(a.lang)}</span>
+      <span class="k">${L('Тренер', 'Тренер')}</span><span class="v">${d.trainer ? `<a href="#/trainers/${d.trainer.id}">${esc(d.trainer.name)}</a> <span class="muted">(${esc(d.trainer.code)})</span>` : a.trainer_code ? `<span class="muted">${L('неизвестный код', 'белгісіз код')}: ${esc(a.trainer_code)}</span>` : '—'}</span>
+      <span class="k">${L('Источник', 'Қайдан келді')}</span><span class="v">${esc(a.utm?.utm_source || (a.trainer_code ? L('ссылка тренера', 'тренер сілтемесі') : L('(прямой)', '(сайтқа өзі кірді)')))}${a.utm?.utm_medium ? ` · ${esc(a.utm.utm_medium)}` : ''}${a.utm?.utm_campaign ? ` · ${esc(a.utm.utm_campaign)}` : ''}${a.utm?.utm_content ? ` · ${esc(a.utm.utm_content)}` : ''}</span>
+      ${a.referrer ? `<span class="k">${L('Реферер', 'Қай сайттан өтті')}</span><span class="v muted" style="word-break:break-all">${esc(a.referrer)}</span>` : ''}
+      ${a.landing ? `<span class="k">${L('Лендинг', 'Алғаш ашқан беті')}</span><span class="v muted" style="word-break:break-all">${esc(a.landing)}</span>` : ''}
+      <span class="k">${L('Начал', 'Тестті бастады')}</span><span class="v">${fmtDateFull(a.created_at)}</span>
+      <span class="k">${L('Закончил', 'Тестті аяқтады')}</span><span class="v">${fmtDateFull(a.finished_at)}</span>
+      <span class="k">${L('Чекаут', 'Төлем бетіне өтті')}</span><span class="v">${fmtDateFull(a.checkout_at)}</span>
       ${isAdmin() ? `<span class="k">Счёт</span><span class="v">${a.invoice_id ? `Kaspi #${esc(a.invoice_id)}` : (a.invoice_error ? `<span style="color:var(--a-red)">не выставлен: ${esc(a.invoice_error.slice(0, 80))}</span>` : '—')}</span>` : ''}
-      <span class="k">Оплата</span><span class="v">${a.paid_at ? `<span style="color:var(--a-green)">${fmtDateFull(a.paid_at)}</span>` : '—'}</span>
+      <span class="k">${L('Оплата', 'Төледі')}</span><span class="v">${a.paid_at ? `<span style="color:var(--a-green)">${fmtDateFull(a.paid_at)}</span>` : '—'}</span>
     </div>
 
-    ${(a as { resultHidden?: boolean }).resultHidden ? `<div class="warn-box">🔒 Клиент прошёл тест, но ещё не оплатил. Баллы, тип и ответы откроются здесь после оплаты — можно напомнить клиенту об оплате.</div>` : ''}
+    ${(a as { resultHidden?: boolean }).resultHidden ? `<div class="warn-box">🔒 ${L('Клиент прошёл тест, но ещё не оплатил. Баллы, тип и ответы откроются здесь после оплаты — можно напомнить клиенту об оплате.', 'Клиент тестті өтті, бірақ әлі төлеген жоқ. Балы, типі мен жауаптары ол төлегеннен кейін осында ашылады. Клиентке төлем туралы еске салсаңыз болады.')}</div>` : ''}
 
     ${d.prepaidLink ? `<div class="card" style="box-shadow:none"><div class="card-head"><h2>Ссылка на тест</h2><span class="hint">оплата вне сайта · ждёт прохождения</span></div><div class="card-body">
       <div class="muted" style="font-size:13px;margin-bottom:10px">Клиент проходит тест по этой ссылке — оплата не нужна, результат откроется сразу и придёт в WhatsApp.</div>
@@ -69,19 +70,19 @@ export async function openAttemptDrawer(id: number, onClose: () => void) {
       <div class="row-actions" style="margin-top:8px"><button class="btn btn-sm" id="copy-prepaid-msg">Копировать с текстом</button>${a.phone ? '<button class="btn btn-sm" id="send-prepaid">Отправить в WhatsApp</button>' : ''}</div>
     </div></div>` : ''}
 
-    ${a.dominant ? `<div class="card" style="box-shadow:none"><div class="card-head"><h2>Результат</h2><span class="hint">${esc(fmtCombo(a.combo))}</span></div><div class="card-body">
+    ${a.dominant ? `<div class="card" style="box-shadow:none"><div class="card-head"><h2>${L('Результат', 'Нәтижесі')}</h2><span class="hint">${esc(fmtCombo(a.combo))}</span></div><div class="card-body">
       <div class="scores">${scores.map(s => `<div class="score-row"><span class="lbl">${esc(fmtNeuro(s.k))}</span><div class="bar"><i style="width:${((s.v ?? 0) / max) * 100}%;background:${NEURO_COLORS[s.k]}"></i></div><span class="num">${s.v ?? '—'} / ${max}</span></div>`).join('')}</div>
-      ${fmtBlocked(a) ? `<div class="warn-box">⚠️ <b>Заблокированность отделов</b>: ${esc(fmtBlocked(a))}. Клиенту на странице результата предложена бесплатная пересдача.</div>` : ''}
-      ${a.retake_of ? `<div class="muted" style="margin-top:8px;font-size:13px">🔁 Бесплатная пересдача прохождения <a href="#/attempts/${a.retake_of}">#${a.retake_of}</a></div>` : ''}
-      <div class="kv" style="margin-top:12px"><span class="k">Доминанта</span><span class="v"><b>${esc(fmtNeuro(a.dominant))}</b></span><span class="k">Минимум</span><span class="v">${esc(fmtNeuro(a.lowest))}</span><span class="k">Видео</span><span class="v">${esc(fmtCombo(a.combo))}</span></div>
+      ${fmtBlocked(a) ? `<div class="warn-box">⚠️ <b>${L('Заблокированность отделов', 'Ми бөліктерінің бұғатталуы')}</b>: ${esc(fmtBlocked(a))}. ${L('Клиенту на странице результата предложена бесплатная пересдача.', 'Клиент нәтиже бетінде тестті тегін қайта өте алады.')}</div>` : ''}
+      ${a.retake_of ? `<div class="muted" style="margin-top:8px;font-size:13px">🔁 ${L(`Бесплатная пересдача прохождения <a href="#/attempts/${a.retake_of}">#${a.retake_of}</a>`, `Клиент <a href="#/attempts/${a.retake_of}">№${a.retake_of}</a> тестті тегін қайта өтті`)}</div>` : ''}
+      <div class="kv" style="margin-top:12px"><span class="k">${L('Доминанта', 'Ең күшті нейромедиаторы')}</span><span class="v"><b>${esc(fmtNeuro(a.dominant))}</b></span><span class="k">${L('Минимум', 'Ең әлсізі')}</span><span class="v">${esc(fmtNeuro(a.lowest))}</span><span class="k">${L('Видео', 'Видео-талдауы')}</span><span class="v">${esc(fmtCombo(a.combo))}</span></div>
       <div id="access-box" style="margin-top:12px">
-        ${d.resultLink ? `<div class="copy-box"><span>🔗</span><code>${esc(d.resultLink)}</code><button class="btn btn-sm" id="copy-link">Копировать</button></div>
-          <div class="row-actions" style="margin-top:8px"><a class="btn btn-sm" href="${esc(d.resultLink)}" target="_blank" rel="noopener">Открыть результат</a>${isAdmin() && a.phone ? '<button class="btn btn-sm" id="resend-link">Отправить ссылку в WhatsApp ещё раз</button>' : ''}</div>`
+        ${d.resultLink ? `<div class="copy-box"><span>🔗</span><code>${esc(d.resultLink)}</code><button class="btn btn-sm" id="copy-link">${L('Копировать', 'Көшіру')}</button></div>
+          <div class="row-actions" style="margin-top:8px"><a class="btn btn-sm" href="${esc(d.resultLink)}" target="_blank" rel="noopener">${L('Открыть результат', 'Нәтижесін ашу')}</a>${isAdmin() && a.phone ? '<button class="btn btn-sm" id="resend-link">Отправить ссылку в WhatsApp ещё раз</button>' : ''}</div>`
         : isAdmin() ? `<div class="card" style="box-shadow:none;border-style:dashed"><div class="card-body">
             <div style="font-weight:700;margin-bottom:6px">Оплата вне сайта?</div>
             <div class="muted" style="font-size:13px;margin-bottom:10px">Выдать результат вручную: прохождение станет «Оплачено», появится ссылка.</div>
             <div class="row-actions"><button class="btn btn-primary btn-sm" id="grant-send">Выдать и отправить в WhatsApp</button><button class="btn btn-sm" id="grant-only">Только ссылка</button></div>
-          </div></div>` : '<div class="muted" style="font-size:13px">Результат не оплачен</div>'}
+          </div></div>` : `<div class="muted" style="font-size:13px">${L('Результат не оплачен', 'Нәтиже әлі төленген жоқ')}</div>`}
       </div>
     </div></div>` : ''}
 
@@ -90,15 +91,15 @@ export async function openAttemptDrawer(id: number, onClose: () => void) {
       <div class="row-actions"><button class="btn btn-primary" id="save">Сохранить</button><span class="muted" id="saved" style="font-size:12.5px"></span></div>
     </div></div>` : ''}
 
-    ${a.answers?.length ? `<div class="card" style="box-shadow:none"><div class="card-head"><h2>Ответы</h2><span class="hint">Да = 1</span></div><div class="card-body">${answersHtml(a)}</div></div>` : ''}
+    ${a.answers?.length ? `<div class="card" style="box-shadow:none"><div class="card-head"><h2>${L('Ответы', 'Жауаптары')}</h2><span class="hint">${L('Да = 1', 'Иә = 1')}</span></div><div class="card-body">${answersHtml(a)}</div></div>` : ''}
 
     ${d.payments.length ? `<div class="card" style="box-shadow:none"><div class="card-head"><h2>Счета</h2></div><div class="card-body" style="display:flex;flex-direction:column;gap:8px">${d.payments.map(p => `<div class="row-actions" style="justify-content:space-between"><span><b>${fmtMoney(p.amount)}</b> <span class="muted">${esc(p.provider === 'kpa' ? 'Kaspi' : p.provider)} #${esc(p.invoice_id)}</span></span><span class="badge badge-${esc(p.status)}">${esc(p.status)}</span><span class="muted" style="font-size:12px">${fmtDateFull(p.paid_at || p.created_at)}${p.source ? ` · ${esc(p.source)}` : ''}${p.link_sent === false ? ' · WA ✗' : p.link_sent ? ' · WA ✓' : ''}</span></div>`).join('')}</div></div>` : ''}
 
-    <div class="card" style="box-shadow:none"><div class="card-head"><h2>История</h2><span class="hint">${d.events.length} событий</span></div><div class="card-body"><div class="timeline">
-      ${d.events.length ? d.events.map(e => `<div class="tl ${e.type === 'paid' ? 'paid' : e.type.includes('fail') ? 'warn' : ''}"><b>${esc(EVENT_LABELS[e.type] || e.type)}${e.step ? ` ${e.step}` : ''}</b><span class="t">${fmtDateFull(e.ts)}</span>${evDetail(e)}</div>`).join('') : '<div class="muted">Событий пока нет</div>'}
+    <div class="card" style="box-shadow:none"><div class="card-head"><h2>${L('История', 'Не істеді')}</h2><span class="hint">${L(`${d.events.length} событий`, `${d.events.length} әрекет`)}</span></div><div class="card-body"><div class="timeline">
+      ${d.events.length ? d.events.map(e => `<div class="tl ${e.type === 'paid' ? 'paid' : e.type.includes('fail') ? 'warn' : ''}"><b>${esc(eventLabel(e.type, EVENT_LABELS[e.type] || e.type, e.step))}</b><span class="t">${fmtDateFull(e.ts)}</span>${evDetail(e)}</div>`).join('') : `<div class="muted">${L('Событий пока нет', 'Әзірге ештеңе болған жоқ')}</div>`}
     </div></div></div>`
 
-  body.querySelector('#copy-link')?.addEventListener('click', () => { navigator.clipboard.writeText(d.resultLink!).then(() => toast('Ссылка скопирована')) })
+  body.querySelector('#copy-link')?.addEventListener('click', () => { navigator.clipboard.writeText(d.resultLink!).then(() => toast(L('Ссылка скопирована', 'Сілтеме көшірілді'))) })
   body.querySelector('#copy-prepaid')?.addEventListener('click', () => { navigator.clipboard.writeText(d.prepaidLink!).then(() => toast('Ссылка на тест скопирована')) })
   body.querySelector('#copy-prepaid-msg')?.addEventListener('click', () => { navigator.clipboard.writeText(inviteText(d.prepaidLink!, a.lang)).then(() => toast('Текст со ссылкой скопирован')) })
   body.querySelector<HTMLButtonElement>('#send-prepaid')?.addEventListener('click', async e => {
@@ -137,7 +138,7 @@ function answersHtml(a: Attempt): string {
   const groups: Record<string, string[]> = { dopamine: [], acetylcholine: [], gaba: [], serotonin: [] }
   a.answers!.forEach((v, i) => {
     const k = neuroAt(i)
-    groups[k].push(`<div class="a ${v ? 'yes' : ''}"><span>${esc(c.questions[k][questionIndexAt(i)])}</span><span>${v ? 'Да' : 'Нет'}</span></div>`)
+    groups[k].push(`<div class="a ${v ? 'yes' : ''}"><span>${esc(c.questions[k][questionIndexAt(i)])}</span><span>${v ? L('Да', 'Иә') : L('Нет', 'Жоқ')}</span></div>`)
   })
   return NEURO_ORDER.map(k => `<details class="ans-group"><summary><b style="color:${NEURO_COLORS[k]}">${esc(fmtNeuro(k))}</b> <span class="muted">${a[k] ?? 0} / ${QUESTIONS_PER_BLOCK}</span></summary><div class="answers">${groups[k].join('')}</div></details>`).join('')
 }
@@ -151,6 +152,6 @@ function evDetail(e: Ev): string {
   if (p.dominant) parts.push(fmtNeuro(String(p.dominant)))
   if (p.reason) parts.push(String(p.reason))
   if (p.error) parts.push(String(p.error).slice(0, 80))
-  if (p.waSent === false) parts.push('WhatsApp не доставлен')
+  if (p.waSent === false) parts.push(L('WhatsApp не доставлен', 'WhatsApp-қа жетпеді'))
   return parts.length ? `<div class="d">${parts.map(esc).join(' · ')}</div>` : ''
 }

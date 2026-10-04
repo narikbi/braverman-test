@@ -1,5 +1,6 @@
 // Универсальная таблица: колонки, сортировка, пагинация; на мобильном — карточки.
 import { esc } from '../format'
+import { L } from '../i18n'
 
 export type Column<T> = { key: string; label: string; num?: boolean; sortable?: boolean; render?: (row: T) => string }
 export type TableState = { sort: string; dir: 'asc' | 'desc'; page: number; limit: number }
@@ -12,7 +13,7 @@ export function renderTable<T extends Record<string, unknown>>(
   st: TableState,
   onChange: (st: TableState) => void,
   onRow?: (row: T) => void,
-  emptyText = 'Пока пусто'
+  emptyText = L('Пока пусто', 'Әзірге бос')
 ) {
   const pages = Math.max(1, Math.ceil(total / st.limit))
   el.innerHTML = `
@@ -21,7 +22,7 @@ export function renderTable<T extends Record<string, unknown>>(
       <tbody>${rows.length ? rows.map((r, i) => `<tr class="row" data-i="${i}">${cols.map(c => `<td class="${c.num ? 'num' : ''}" data-l="${esc(c.label)}">${c.render ? c.render(r) : esc(r[c.key] as string)}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${cols.length}"><div class="empty">${esc(emptyText)}</div></td></tr>`}</tbody>
     </table></div>
     <div class="pager">
-      <span>${total ? `${(st.page - 1) * st.limit + 1}–${Math.min(total, st.page * st.limit)} из ${total}` : ''}</span>
+      <span>${total ? `${(st.page - 1) * st.limit + 1}–${Math.min(total, st.page * st.limit)} ${L('из', '/')} ${total}` : ''}</span>
       <div class="btns">
         <button class="btn btn-sm" id="pg-prev" ${st.page <= 1 ? 'disabled' : ''}>←</button>
         <span style="padding:6px 4px">${st.page} / ${pages}</span>

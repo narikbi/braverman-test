@@ -1,15 +1,18 @@
+import { L, adminLang } from './i18n'
+
 export function esc(s: unknown): string {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
 }
 
 const dtf = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Almaty', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 const dtfFull = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Almaty', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-const dayf = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Almaty', day: '2-digit', month: 'short' })
+const dayfRu = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Almaty', day: '2-digit', month: 'short' })
+const dayfKk = (() => { try { return new Intl.DateTimeFormat('kk-KZ', { timeZone: 'Asia/Almaty', day: '2-digit', month: 'short' }) } catch { return dayfRu } })()
 const hourf = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Almaty', hour: '2-digit', minute: '2-digit' })
 
 export const fmtDate = (v: string | null | undefined) => (v ? dtf.format(new Date(v)) : '—')
 export const fmtDateFull = (v: string | null | undefined) => (v ? dtfFull.format(new Date(v)) : '—')
-export const fmtDay = (v: string) => dayf.format(new Date(v))
+export const fmtDay = (v: string) => (adminLang() === 'kk' ? dayfKk : dayfRu).format(new Date(v))
 export const fmtHour = (v: string) => hourf.format(new Date(v))
 export const fmtMoney = (n: number | string | null | undefined) => (n == null ? '—' : `${Math.round(Number(n)).toLocaleString('ru-RU')} ₸`)
 export const fmtNum = (n: number) => n.toLocaleString('ru-RU')
@@ -26,7 +29,7 @@ export function fmtPhone(p: string | null | undefined): string {
 /** Дельта к прошлому периоду: {text, dir} */
 export function fmtDelta(cur: number, prev: number): { text: string; dir: 'up' | 'down' | 'flat' } {
   if (!prev && !cur) return { text: '—', dir: 'flat' }
-  if (!prev) return { text: 'новое', dir: 'up' }
+  if (!prev) return { text: L('новое', 'жаңа'), dir: 'up' }
   const d = ((cur - prev) / prev) * 100
   if (Math.abs(d) < 0.5) return { text: '0%', dir: 'flat' }
   return { text: `${d > 0 ? '+' : ''}${d.toFixed(0)}%`, dir: d > 0 ? 'up' : 'down' }

@@ -1,10 +1,11 @@
 // Оболочка: сайдбар (десктоп) / нижняя навигация (мобильный) + заголовок с переключателем периода.
-// Тренер видит только Дашборд и Клиенты.
+// Тренер видит Шолу/Дашборд, Клиенты и Профиль; язык кабинета у тренера — по выбору (Рус/Қаз).
 import { esc } from './format'
 import { renderRange } from './components/range'
 import { adminPost } from './api'
 import { navigate } from './router'
 import { META, isAdmin } from './state'
+import { L, langToggle, bindLangToggle } from './i18n'
 
 const NAV_ADMIN = [
   { hash: '#/', ic: '📊', label: 'Дашборд', match: 'dashboard' },
@@ -13,34 +14,35 @@ const NAV_ADMIN = [
   { hash: '#/trainers', ic: '🎓', label: 'Тренеры', match: 'trainers' },
   { hash: '#/health', ic: '🩺', label: 'Система', match: 'health' }
 ]
-const NAV_TRAINER = [
-  { hash: '#/', ic: '📊', label: 'Дашборд', match: 'dashboard' },
-  { hash: '#/attempts', ic: '👥', label: 'Клиенты', match: 'attempts' },
-  { hash: '#/me', ic: '🧠', label: 'Профиль', match: 'me' }
+const navTrainer = () => [
+  { hash: '#/', ic: '📊', label: L('Дашборд', 'Шолу'), match: 'dashboard' },
+  { hash: '#/attempts', ic: '👥', label: L('Клиенты', 'Клиенттер'), match: 'attempts' },
+  { hash: '#/me', ic: '🧠', label: L('Профиль', 'Профиль'), match: 'me' }
 ]
 
 export function renderShell(active: string, title: string, sub = '', withRange = true): HTMLElement {
   const app = document.getElementById('app')!
-  const nav = isAdmin() ? NAV_ADMIN : NAV_TRAINER
+  const nav = isAdmin() ? NAV_ADMIN : navTrainer()
   const isActive = (m: string) => active === m || (m === 'attempts' && active === 'attempt') || (m === 'trainers' && active === 'trainer')
-  const brand = isAdmin() ? 'Braverman' : `Braverman · ${esc(META.trainer?.name || 'тренер')}`
+  const brand = isAdmin() ? 'Braverman' : `Braverman · ${esc(META.trainer?.name || L('тренер', 'тренер'))}`
   app.innerHTML = `
     <div class="shell">
       <aside class="side">
         <div class="side-brand"><span class="dot">🧠</span> ${brand}</div>
         ${nav.map(n => `<a href="${n.hash}" class="${isActive(n.match) ? 'active' : ''}"><span class="ic">${n.ic}</span>${n.label}</a>`).join('')}
         <div class="spacer"></div>
-        ${META.trainer ? `<a href="/t/${esc(META.trainer.code)}" target="_blank" rel="noopener"><span class="ic">🔗</span>Моя ссылка</a>` : ''}
-        <a href="/" target="_blank" rel="noopener"><span class="ic">↗</span>Открыть сайт</a>
-        <button class="logout" data-logout>Выйти</button>
+        ${META.trainer ? `<a href="/t/${esc(META.trainer.code)}" target="_blank" rel="noopener"><span class="ic">🔗</span>${L('Моя ссылка', 'Менің сілтемем')}</a>` : ''}
+        <a href="/" target="_blank" rel="noopener"><span class="ic">↗</span>${L('Открыть сайт', 'Сайтты ашу')}</a>
+        ${isAdmin() ? '' : `<div class="side-lang">${langToggle()}</div>`}
+        <button class="logout" data-logout>${L('Выйти', 'Шығу')}</button>
       </aside>
       <main class="main">
         <div class="mtop">
           <div class="mtop-brand"><span class="dot">🧠</span><span>${brand}</span></div>
           <div class="mtop-actions">
-            ${META.trainer ? `<a href="/t/${esc(META.trainer.code)}" target="_blank" rel="noopener">🔗 Ссылка</a>` : ''}
-            <a href="/" target="_blank" rel="noopener">↗ Сайт</a>
-            <button data-logout>Выйти</button>
+            ${isAdmin() ? '' : langToggle()}
+            <a href="/" target="_blank" rel="noopener">↗ ${L('Сайт', 'Сайт')}</a>
+            <button data-logout>${L('Выйти', 'Шығу')}</button>
           </div>
         </div>
         <div class="head">
@@ -54,6 +56,7 @@ export function renderShell(active: string, title: string, sub = '', withRange =
       </nav>
     </div>`
   if (withRange) renderRange(app.querySelector('#range-slot')!)
+  bindLangToggle(app)
   app.querySelectorAll('[data-logout]').forEach(b => b.addEventListener('click', async () => {
     await adminPost('logout').catch(() => {})
     navigate('#/login')

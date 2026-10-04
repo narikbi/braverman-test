@@ -13,6 +13,7 @@ import { renderPayments } from './pages/payments'
 import { renderTrainers, renderTrainer } from './pages/trainers'
 import { renderHealth } from './pages/health'
 import { toast } from './components/toast'
+import { L, forceAdminLang } from './i18n'
 
 let authed = false
 let drawerOpen = false
@@ -21,6 +22,7 @@ async function ensureAuth(): Promise<boolean> {
   if (authed) return true
   try {
     setMeta(await adminGet<Meta>('me'))
+    forceAdminLang(isAdmin() ? 'ru' : null) // у владельца — русский, у тренера — по выбору
     authed = true
     return true
   } catch (e) {
@@ -32,12 +34,12 @@ async function ensureAuth(): Promise<boolean> {
 async function render() {
   const route = parseRoute()
   try {
-    if (route.name === 'login') { authed = false; return renderLogin() }
+    if (route.name === 'login') { authed = false; forceAdminLang(null); return renderLogin() }
     if (!(await ensureAuth())) return navigate('#/login')
-    const clients = isAdmin() ? ['Прохождения', 'Все, кто начал тест'] : ['Клиенты', 'Ваши клиенты и их результаты']
+    const clients = isAdmin() ? ['Прохождения', 'Все, кто начал тест'] : [L('Клиенты', 'Клиенттер'), L('Ваши клиенты и их результаты', 'Сілтемеңізбен келген клиенттер мен олардың нәтижесі осында көрінеді')]
 
     switch (route.name) {
-      case 'dashboard': return await renderDashboard(renderShell('dashboard', 'Дашборд', isAdmin() ? 'Воронка, выручка, источники и тренеры' : 'Ваши клиенты за период'))
+      case 'dashboard': return await renderDashboard(renderShell('dashboard', L('Дашборд', 'Шолу'), isAdmin() ? 'Воронка, выручка, источники и тренеры' : L('Ваши клиенты за период', 'Сілтемеңізбен қанша адам келіп, тест өткенін осыдан көресіз')))
       case 'attempts': return await renderAttempts(renderShell('attempts', clients[0], clients[1]))
       case 'attempt': {
         if (!document.querySelector('#attempts-page')) await renderAttempts(renderShell('attempt', clients[0], clients[1]))
@@ -51,12 +53,12 @@ async function render() {
       case 'trainers': if (!isAdmin()) return navigate('#/'); return await renderTrainers(renderShell('trainers', 'Тренеры', 'Партнёрские ссылки и их результаты'))
       case 'trainer': if (!isAdmin()) return navigate('#/'); return await renderTrainer(renderShell('trainer', 'Тренер', ''), route.id!)
       case 'health': if (!isAdmin()) return navigate('#/'); return await renderHealth(renderShell('health', 'Система', 'Состояние интеграций', false))
-      case 'me': if (isAdmin()) return navigate('#/'); return await renderProfile(renderShell('me', 'Профиль', 'Ваша ссылка для клиентов и ваш результат', false))
+      case 'me': if (isAdmin()) return navigate('#/'); return await renderProfile(renderShell('me', L('Профиль', 'Профиль'), L('Ваша ссылка для клиентов и ваш результат', 'Мұнда сілтемеңізді клиенттерге жібересіз және өз нәтижеңізді көресіз'), false))
     }
   } catch (e) {
     if (e instanceof Unauthorized) { authed = false; return navigate('#/login') }
     console.error(e)
-    toast('Ошибка загрузки. Обнови страницу.', 'err')
+    toast(L('Ошибка загрузки. Обнови страницу.', 'Бет жүктелмеді. Бетті жаңартып көріңіз.'), 'err')
   }
 }
 

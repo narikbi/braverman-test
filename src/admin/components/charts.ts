@@ -1,6 +1,7 @@
 // Обёртки Chart.js: динамика и источники. Воронка рисуется CSS-полосами (см. dashboard.ts).
 import { Chart, type ChartConfiguration, LineController, BarController, LineElement, PointElement, BarElement, LinearScale, CategoryScale, Tooltip, Legend, Filler } from 'chart.js'
 import { bucketLabel } from '../format'
+import { L } from '../i18n'
 
 Chart.register(LineController, BarController, LineElement, PointElement, BarElement, LinearScale, CategoryScale, Tooltip, Legend, Filler)
 Chart.defaults.font.family = "'Inter', system-ui, sans-serif"
@@ -23,11 +24,11 @@ export function timelineChart(canvas: HTMLCanvasElement, points: Point[], bucket
     data: {
       labels,
       datasets: [
-        { label: 'Открыли сайт', data: points.map(p => p.views), borderColor: '#94a3b8', backgroundColor: 'rgba(148,163,184,.12)', fill: true, tension: 0.35, pointRadius: 2, yAxisID: 'y' },
-        { label: 'Начали', data: points.map(p => p.started), borderColor: '#2f5cff', backgroundColor: 'rgba(47,92,255,.10)', fill: true, tension: 0.35, pointRadius: 2, yAxisID: 'y' },
-        { label: 'Закончили', data: points.map(p => p.finished), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,.10)', fill: true, tension: 0.35, pointRadius: 2, yAxisID: 'y' },
-        { label: 'Оплаты', data: points.map(p => p.paid), borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.15)', fill: true, tension: 0.35, pointRadius: 3, yAxisID: 'y' },
-        { label: 'Выручка, ₸', data: points.map(p => p.revenue), borderColor: '#7c3aed', borderDash: [4, 4], tension: 0.35, pointRadius: 0, yAxisID: 'y2' }
+        { label: L('Открыли сайт', 'Сайтты ашты'), data: points.map(p => p.views), borderColor: '#94a3b8', backgroundColor: 'rgba(148,163,184,.12)', fill: true, tension: 0.35, pointRadius: 2, yAxisID: 'y' },
+        { label: L('Начали', 'Бастады'), data: points.map(p => p.started), borderColor: '#2f5cff', backgroundColor: 'rgba(47,92,255,.10)', fill: true, tension: 0.35, pointRadius: 2, yAxisID: 'y' },
+        { label: L('Закончили', 'Аяқтады'), data: points.map(p => p.finished), borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,.10)', fill: true, tension: 0.35, pointRadius: 2, yAxisID: 'y' },
+        { label: L('Оплаты', 'Төледі'), data: points.map(p => p.paid), borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.15)', fill: true, tension: 0.35, pointRadius: 3, yAxisID: 'y' },
+        { label: L('Выручка, ₸', 'Түсім, ₸'), data: points.map(p => p.revenue), borderColor: '#7c3aed', borderDash: [4, 4], tension: 0.35, pointRadius: 0, yAxisID: 'y2' }
       ]
     },
     options: {
@@ -49,9 +50,9 @@ export function sourcesChart(canvas: HTMLCanvasElement, rows: { source: string; 
     data: {
       labels: top.map(r => r.source),
       datasets: [
-        { label: 'Открыли', data: top.map(r => r.views), backgroundColor: '#cbd5e1', borderRadius: 6 },
-        { label: 'Закончили', data: top.map(r => r.finished), backgroundColor: '#2f5cff', borderRadius: 6 },
-        { label: 'Оплатили', data: top.map(r => r.paid), backgroundColor: '#16a34a', borderRadius: 6 }
+        { label: L('Открыли', 'Ашты'), data: top.map(r => r.views), backgroundColor: '#cbd5e1', borderRadius: 6 },
+        { label: L('Закончили', 'Аяқтады'), data: top.map(r => r.finished), backgroundColor: '#2f5cff', borderRadius: 6 },
+        { label: L('Оплатили', 'Төледі'), data: top.map(r => r.paid), backgroundColor: '#16a34a', borderRadius: 6 }
       ]
     },
     options: {

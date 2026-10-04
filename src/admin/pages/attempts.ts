@@ -3,6 +3,7 @@ import { rangeParams, META, isAdmin, statusLabel } from '../state'
 import { esc, fmtDate, fmtPhone, fmtLang, fmtNeuro, fmtCombo, fmtBlocked } from '../format'
 import { renderTable, type TableState } from '../components/table'
 import { navigate } from '../router'
+import { L } from '../i18n'
 import { toast } from '../components/toast'
 import { dbMissing } from './shared'
 import { openPrepaidDialog } from './prepaid-dialog'
@@ -25,12 +26,12 @@ export async function renderAttempts(page: HTMLElement, fixedTrainer?: number) {
   page.innerHTML = `
     <div class="card" id="attempts-page"><div class="card-body">
       <div class="toolbar">
-        <input class="input search" id="q" placeholder="Поиск по имени или телефону" value="${esc(st.q)}" />
+        <input class="input search" id="q" placeholder="${L('Поиск по имени или телефону', 'Аты не телефонын жазып іздеңіз')}" value="${esc(st.q)}" />
         <select class="input" id="status">
-          <option value="">Все статусы</option>
-          ${META.statuses.map(s => `<option value="${s.key}" ${st.status === s.key ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}
+          <option value="">${L('Все статусы', 'Күйі: барлығы')}</option>
+          ${META.statuses.map(s => `<option value="${s.key}" ${st.status === s.key ? 'selected' : ''}>${esc(statusLabel(s.key))}</option>`).join('')}
         </select>
-        <select class="input" id="lang"><option value="">Любой язык</option><option value="ru" ${st.lang === 'ru' ? 'selected' : ''}>Русский</option><option value="kk" ${st.lang === 'kk' ? 'selected' : ''}>Қазақша</option></select>
+        <select class="input" id="lang"><option value="">${L('Любой язык', 'Тілі: барлығы')}</option><option value="ru" ${st.lang === 'ru' ? 'selected' : ''}>${L('Русский', 'Орысша')}</option><option value="kk" ${st.lang === 'kk' ? 'selected' : ''}>Қазақша</option></select>
         ${trainers.length ? `<select class="input" id="trainer"><option value="">Все тренеры</option>${trainers.map(t => `<option value="${t.id}" ${st.trainer === String(t.id) ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>` : ''}
         <button class="btn" id="export">⬇ CSV</button>
         ${isAdmin() && !fixedTrainer ? '<button class="btn btn-primary" id="prepaid">＋ Оплата вне сайта</button>' : ''}
@@ -42,15 +43,15 @@ export async function renderAttempts(page: HTMLElement, fixedTrainer?: number) {
     try {
       const data = await adminGet<List>('attempts', { ...rangeParams(), q: st.q, status: st.status, trainer: st.trainer, lang: st.lang, sort: st.sort, dir: st.dir, page: st.page, limit: st.limit })
       renderTable<Attempt>(tbl, [
-        { key: 'created_at', label: 'Дата', sortable: true, render: r => `<span class="muted">${fmtDate(r.created_at)}</span>` },
-        { key: 'name', label: 'Имя', sortable: true, render: r => `<b>${esc(r.name || '—')}</b><br /><span class="muted" style="font-size:12px">${fmtLang(r.lang)}</span>` },
-        { key: 'phone', label: 'Телефон', render: r => fmtPhone(r.phone) },
-        { key: 'status', label: 'Статус', sortable: true, render: r => badge(r.status) + (r.status === 'started' ? ` <span class="muted" style="font-size:12px">${r.answered}/200</span>` : '') + (r.test_amount ? ' <span class="chip">тест</span>' : '') + (r.paid_by === 'retake' ? ' <span class="chip">пересдача</span>' : '') + (r.paid_by === 'trainer' ? ' <span class="chip">свой тест тренера</span>' : '') + (r.paid_by === 'prepaid' ? ` <span class="chip">вне сайта</span>${r.dominant ? '' : ' <span class="chip chip-warn">ждёт теста</span>'}` : '') + (fmtBlocked(r) ? ` <span class="chip chip-warn" title="Заблокированность отделов: ${esc(fmtBlocked(r))}">блок</span>` : '') },
-        { key: 'dominant', label: 'Доминанты', sortable: true, render: r => r.dominant ? `<b>${esc(r.combo ? fmtCombo(r.combo) : fmtNeuro(r.dominant))}</b>` : r.resultHidden ? '<span class="muted">после оплаты</span>' : '<span class="muted">—</span>' },
+        { key: 'created_at', label: L('Дата', 'Күні'), sortable: true, render: r => `<span class="muted">${fmtDate(r.created_at)}</span>` },
+        { key: 'name', label: L('Имя', 'Аты'), sortable: true, render: r => `<b>${esc(r.name || '—')}</b><br /><span class="muted" style="font-size:12px">${fmtLang(r.lang)}</span>` },
+        { key: 'phone', label: L('Телефон', 'Телефоны'), render: r => fmtPhone(r.phone) },
+        { key: 'status', label: L('Статус', 'Күйі'), sortable: true, render: r => badge(r.status) + (r.status === 'started' ? ` <span class="muted" style="font-size:12px">${r.answered}/200</span>` : '') + (r.test_amount ? ' <span class="chip">тест</span>' : '') + (r.paid_by === 'retake' ? ` <span class="chip">${L('пересдача', 'қайта өтті')}</span>` : '') + (r.paid_by === 'trainer' ? ' <span class="chip">свой тест тренера</span>' : '') + (r.paid_by === 'prepaid' ? ` <span class="chip">вне сайта</span>${r.dominant ? '' : ' <span class="chip chip-warn">ждёт теста</span>'}` : '') + (fmtBlocked(r) ? ` <span class="chip chip-warn" title="Заблокированность отделов: ${esc(fmtBlocked(r))}">блок</span>` : '') },
+        { key: 'dominant', label: L('Доминанты', 'Басым жұбы'), sortable: true, render: r => r.dominant ? `<b>${esc(r.combo ? fmtCombo(r.combo) : fmtNeuro(r.dominant))}</b>` : r.resultHidden ? `<span class="muted">${L('после оплаты', 'төлегенде ашылады')}</span>` : '<span class="muted">—</span>' },
         ...(isAdmin() && !fixedTrainer ? [{ key: 'trainer_name', label: 'Тренер', render: (r: Attempt) => r.trainer_name ? esc(r.trainer_name) : r.trainer_code ? `<span class="muted">${esc(r.trainer_code)}?</span>` : '<span class="muted">—</span>' }] : []),
-        { key: 'source', label: 'Источник', render: r => `<span class="muted">${esc(r.source || (r.trainer_code ? 'тренер' : '—'))}${r.campaign ? ` · ${esc(r.campaign)}` : ''}</span>` },
-        { key: 'paid_at', label: 'Оплата', sortable: true, render: r => r.paid_at ? `<span style="color:var(--a-green);font-weight:700">${fmtDate(r.paid_at)}</span>` : '<span class="muted">—</span>' }
-      ], data.items, data.total, st, s => { Object.assign(st, s); load() }, r => navigate(`#/attempts/${r.id}`), 'Прохождений за период нет')
+        { key: 'source', label: L('Источник', 'Қайдан келді'), render: r => `<span class="muted">${esc(r.source || (r.trainer_code ? L('тренер', 'сіздің сілтемеңіз') : '—'))}${r.campaign ? ` · ${esc(r.campaign)}` : ''}</span>` },
+        { key: 'paid_at', label: L('Оплата', 'Төлеген күні'), sortable: true, render: r => r.paid_at ? `<span style="color:var(--a-green);font-weight:700">${fmtDate(r.paid_at)}</span>` : '<span class="muted">—</span>' }
+      ], data.items, data.total, st, s => { Object.assign(st, s); load() }, r => navigate(`#/attempts/${r.id}`), isAdmin() ? 'Прохождений за период нет' : L('За этот период по вашей ссылке никто не пришёл', 'Бұл кезеңде сілтемеңізбен әлі ешкім келмеді'))
     } catch (e) {
       if (e instanceof ApiError && e.code === 'db_not_configured') return dbMissing(page)
       throw e
@@ -71,7 +72,7 @@ export async function renderAttempts(page: HTMLElement, fixedTrainer?: number) {
       a.download = r.filename
       a.click()
       URL.revokeObjectURL(a.href)
-    } catch { toast('Не удалось выгрузить', 'err') }
+    } catch { toast(L('Не удалось выгрузить', 'Файл жүктелмеді'), 'err') }
   })
   page.querySelector('#prepaid')?.addEventListener('click', () => openPrepaidDialog(() => load()))
   await load()

@@ -1,4 +1,5 @@
 // Период дашборда — общий для всех экранов, живёт в localStorage. Плюс мета с сервера (action=me).
+import { L, statusKk } from './i18n'
 export type RangePreset = 'today' | '7d' | '30d' | 'all' | 'custom'
 export type Range = { preset: RangePreset; from?: string; to?: string }
 
@@ -29,4 +30,4 @@ export type Meta = { role: 'admin' | 'trainer'; trainer: { id: number; name: str
 export let META: Meta = { role: 'admin', trainer: null, statuses: [], site: '', price: 5000, seesPhone: true }
 export function setMeta(m: Meta) { META = m }
 export const isAdmin = () => META.role === 'admin'
-export const statusLabel = (key: string) => META.statuses.find(s => s.key === key)?.label ?? key
+export const statusLabel = (key: string) => { const ru = META.statuses.find(s => s.key === key)?.label ?? key; return L(ru, statusKk(key) ?? ru) }
