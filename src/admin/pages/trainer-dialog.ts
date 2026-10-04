@@ -6,7 +6,7 @@ import { META } from '../state'
 
 export type TrainerRow = { id: number; created_at: string; code: string; name: string; phone: string; active: boolean; notes: string; login: string | null; has_password: boolean; last_login_at: string | null }
 
-const ERR: Record<string, string> = { code: 'Код: 2–32 символа, латиница/цифры/дефис/подчёркивание', code_taken: 'Такой код уже занят', login_taken: 'Такой логин уже занят', login: 'Логин: 3–64 символа, латиница/цифры/точка/@', fields: 'Заполните имя и код', password: 'Пароль — минимум 6 символов' }
+const ERR: Record<string, string> = { code: 'Код: 2–32 символа, латиница/цифры/дефис/подчёркивание', code_taken: 'Такой код уже занят', login_taken: 'Такой логин уже занят', login: 'Логин: 3–64 символа, латиница/цифры/точка/@', fields: 'Заполните имя и код', password: 'Пароль — минимум 6 символов', phone: 'Номер: казахстанский мобильный, +7 7XX XXX XX XX', phone_required: 'Укажите номер телефона — по нему тренер входит в кабинет', phone_taken: 'Этот номер уже есть у другого тренера' }
 
 export function openTrainerDialog(t: TrainerRow | null, onDone: () => void) {
   const bg = document.createElement('div'); bg.className = 'drawer-bg'
@@ -17,7 +17,7 @@ export function openTrainerDialog(t: TrainerRow | null, onDone: () => void) {
     <div class="drawer-body">
       <div>${lbl('Имя')}<input class="input" id="t-name" value="${esc(t?.name || '')}" placeholder="Айгерім Сериккызы" /></div>
       <div>${lbl('Код ссылки')}<input class="input" id="t-code" value="${esc(t?.code || '')}" placeholder="aigerim" /><div class="muted" style="font-size:12px;margin-top:4px">Ссылка: <code id="t-link">${esc(META.site)}/t/${esc(t?.code || '…')}</code>${t ? '' : ' · код и логин заполняются из имени, можно изменить'}</div></div>
-      <div>${lbl('Телефон')}<input class="input" id="t-phone" type="tel" value="${esc(t?.phone || '')}" placeholder="+7 7__ ___ __ __" /></div>
+      <div>${lbl('Телефон — по нему тренер входит в кабинет')}<input class="input" id="t-phone" type="tel" inputmode="tel" value="${esc(t?.phone || '')}" placeholder="+7 7__ ___ __ __" /><div id="t-phone-hint" style="font-size:12px;margin-top:4px"></div></div>
       <div class="card" style="box-shadow:none"><div class="card-head"><h2>Кабинет тренера</h2></div><div class="card-body" style="display:flex;flex-direction:column;gap:10px">
         <div class="muted" style="font-size:12.5px">Тренер входит на <code>${esc(META.site)}/admin</code> и видит только своих клиентов.</div>
         <div>${lbl('Логин')}<input class="input" id="t-login" value="${esc(t?.login || '')}" placeholder="aigerim" autocomplete="off" /></div>
@@ -82,8 +82,32 @@ export function openTrainerDialog(t: TrainerRow | null, onDone: () => void) {
     dr.querySelector('#a-more')?.addEventListener('click', () => { close(); setTimeout(() => openTrainerDialog(null, onDone), 260) })
   }
 
+  // Номер: сразу проверяем, не занят ли он другим тренером (вход по номеру — номер должен быть уникальным)
+  let phoneTaken = false
+  let phoneTimer: number | undefined
+  const phoneHint = dr.querySelector<HTMLElement>('#t-phone-hint')!
+  const checkPhone = async () => {
+    const raw = v('#t-phone').trim()
+    const digits = raw.replace(/\D/g, '')
+    phoneTaken = false
+    if (digits.length < 10) { phoneHint.textContent = ''; return }
+    try {
+      const r = await adminGet<{ valid: boolean; taken: { id: number; name: string } | null }>('trainer-phone-check', { phone: raw, ...(t ? { id: t.id } : {}) })
+      if (raw !== v('#t-phone').trim()) return // пока ждали ответ, номер изменили
+      if (!r.valid) { phoneHint.innerHTML = '<span style="color:var(--a-red)">Нужен казахстанский мобильный номер: +7 7XX XXX XX XX</span>'; return }
+      phoneTaken = !!r.taken
+      phoneHint.innerHTML = r.taken
+        ? `<span style="color:var(--a-red);font-weight:600">✗ Номер занят — он уже у тренера «${esc(r.taken.name)}»</span>`
+        : '<span style="color:var(--a-green)">✓ Номер свободен</span>'
+    } catch { phoneHint.textContent = '' }
+  }
+  dr.querySelector('#t-phone')!.addEventListener('input', () => { clearTimeout(phoneTimer); phoneTimer = window.setTimeout(checkPhone, 350) })
+  if (t?.phone) checkPhone()
+
   dr.querySelector('#t-save')!.addEventListener('click', async () => {
     err.style.display = 'none'
+    if (phoneTaken) { err.style.display = 'block'; err.textContent = 'Этот номер уже есть у другого тренера — укажите другой'; return }
+    if (!t && v('#t-phone').replace(/\D/g, '').length < 10) { err.style.display = 'block'; err.textContent = ERR.phone_required; return }
     const btn = dr.querySelector<HTMLButtonElement>('#t-save')!
     btn.disabled = true
     const body: Record<string, unknown> = { name: v('#t-name').trim(), code: v('#t-code').trim().toLowerCase(), phone: v('#t-phone').trim(), notes: v('#t-notes'), login: v('#t-login').trim().toLowerCase() }
@@ -126,10 +150,10 @@ export function genPassword(len = 10): string {
 function accessText(a: { code: string; login: string; pass: string }): string {
   const site = META.site || 'https://braverman.kz'
   return `Сәлеметсіз бе! Braverman тренер кабинетіне осы деректермен кіресіз:\n` +
-    `Сайт: ${site}/admin\nЛогин: ${a.login}\nҚұпиясөз: ${a.pass}\n` +
+    `Сайт: ${site}/admin\nЛогин: ${a.login} (телефон нөміріңізбен де кіре аласыз)\nҚұпиясөз: ${a.pass}\n` +
     `Клиенттерге жіберетін сілтемеңіз: ${site}/t/${a.code}\n\n` +
     `Здравствуйте! Доступ в кабинет тренера Braverman:\n` +
-    `Сайт: ${site}/admin\nЛогин: ${a.login}\nПароль: ${a.pass}\n` +
+    `Сайт: ${site}/admin\nЛогин: ${a.login} (или входите по номеру телефона)\nПароль: ${a.pass}\n` +
     `Ваша ссылка для клиентов: ${site}/t/${a.code}`
 }
 

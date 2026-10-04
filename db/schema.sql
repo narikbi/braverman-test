@@ -108,3 +108,6 @@ ALTER TABLE payments ADD COLUMN IF NOT EXISTS method text;
 -- trainer_code у неё NULL, поэтому она не попадает к тренеру в «Клиенты» и в его статистику; платежа нет.
 ALTER TABLE attempts ADD COLUMN IF NOT EXISTS self_trainer_id bigint REFERENCES trainers(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS attempts_self_trainer_idx ON attempts (self_trainer_id, created_at DESC);
+
+-- Номер телефона тренера уникален (вход по номеру): сравниваем последние 10 цифр, пустой номер не считается.
+CREATE UNIQUE INDEX IF NOT EXISTS trainers_phone_uniq ON trainers (right(regexp_replace(phone, '\D', '', 'g'), 10)) WHERE phone <> '';

@@ -407,6 +407,15 @@ export async function findTrainerByLogin(login: string): Promise<{ id: number; p
   return rows[0] ? { ...rows[0], id: Number(rows[0].id) } : null // bigint приходит строкой
 }
 
+/** Тренер по номеру телефона (последние 10 цифр; как в уникальном индексе trainers_phone_uniq). */
+export async function findTrainerByPhone(phone: string, excludeId: number | null = null): Promise<{ id: number; password_hash: string | null; active: boolean; name: string } | null> {
+  const ten = phone.replace(/\D/g, '').slice(-10)
+  if (ten.length !== 10) return null
+  const rows = await q<{ id: number; password_hash: string | null; active: boolean; name: string }>('trainer_by_phone',
+    `SELECT id, password_hash, active, name FROM trainers WHERE phone <> '' AND right(regexp_replace(phone, '\\D', '', 'g'), 10) = $1 AND ($2::bigint IS NULL OR id <> $2) LIMIT 1`, [ten, excludeId])
+  return rows[0] ? { ...rows[0], id: Number(rows[0].id) } : null
+}
+
 export async function touchTrainerLogin(id: number) {
   await q('trainer_touch', 'UPDATE trainers SET last_login_at = now() WHERE id = $1', [id])
 }

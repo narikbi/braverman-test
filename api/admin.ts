@@ -4,11 +4,11 @@
 //       trainer-create, trainer-update, trainer-password, tg-setup, prepaid-create, prepaid-grant, prepaid-send
 // Тренер: GET me-profile; единственный разрешённый ему POST — self-test (свой бесплатный тест).
 // Роль trainer видит только свои попытки (scope по trainer_id / trainer_code); POST-действия ей запрещены.
-import { adminConfigured, checkCredentials, makeSession, sessionFromReq, sessionCookie, clearCookie, hashPassword, verifyPassword, type Session } from './_admin-auth.js'
+import { adminConfigured, checkCredentials, checkAdminPhone, makeSession, sessionFromReq, sessionCookie, clearCookie, hashPassword, verifyPassword, type Session } from './_admin-auth.js'
 import {
   dbConfigured, q, ipHash, logEvent, ATTEMPT_STATUSES, type AttemptRow, getAttempt, setAttemptNotes, grantManualPaid, setPaymentLinkSent,
   listTrainers, getTrainer, createTrainer, updateTrainer, setTrainerPassword, findTrainerByLogin, touchTrainerLogin, createPrepaidAttempt,
-  createTrainerSelfAttempt, trainerSelfAttempts
+  createTrainerSelfAttempt, trainerSelfAttempts, findTrainerByPhone
 } from './_db.js'
 import { sendWhatsApp, whatsappConfigured } from './_whatsapp.js'
 import { resultLinkMessage, prepaidLinkMessage } from './_wa-text.js'
@@ -84,21 +84,24 @@ export default async function handler(req: Req, res: Res) {
     const fails = await q<{ n: string }>('login_fails',
       `SELECT count(*) AS n FROM events WHERE type IN ('admin_login_fail','trainer_login_fail') AND ip_hash = $1 AND ts > now() - interval '15 minutes'`, [ip])
     if (Number(fails[0]?.n ?? 0) >= 10) return res.status(429).json({ ok: false, error: 'locked' })
-    const { login = '', password = '' } = bodyOf(req) as { login?: string; password?: string }
+    const { login = '', password = '', phone = '' } = bodyOf(req) as { login?: string; password?: string; phone?: string }
+    const byPhone = !!String(phone).trim()
+    const tel = byPhone ? normalizePhone(phone) : null
+    if (byPhone && !tel) return res.status(400).json({ ok: false, error: 'phone' })
 
-    if (checkCredentials(String(login), String(password))) {
+    if (byPhone ? checkAdminPhone(tel!, String(password)) : checkCredentials(String(login), String(password))) {
       await logEvent({ type: 'admin_login_ok', ipHash: ip })
       res.setHeader('Set-Cookie', sessionCookie(makeSession('admin')))
       return res.status(200).json({ ok: true, role: 'admin' })
     }
-    const tr = await findTrainerByLogin(String(login).trim().toLowerCase())
+    const tr = byPhone ? await findTrainerByPhone(tel!) : await findTrainerByLogin(String(login).trim().toLowerCase())
     if (tr && tr.active && verifyPassword(String(password), tr.password_hash)) {
       await logEvent({ type: 'trainer_login_ok', ipHash: ip, props: { trainerId: tr.id } })
       await touchTrainerLogin(tr.id)
       res.setHeader('Set-Cookie', sessionCookie(makeSession('trainer', tr.id)))
       return res.status(200).json({ ok: true, role: 'trainer' })
     }
-    await logEvent({ type: tr ? 'trainer_login_fail' : 'admin_login_fail', ipHash: ip })
+    await logEvent({ type: tr ? 'trainer_login_fail' : 'admin_login_fail', ipHash: ip, props: { byPhone } })
     await sleep(300)
     return res.status(401).json({ ok: false, error: 'bad_credentials' })
   }
@@ -434,6 +437,15 @@ export default async function handler(req: Req, res: Res) {
     }
   }
 
+  // Форма тренера: номер занят? (мгновенная проверка при вводе)
+  if (action === 'trainer-phone-check') {
+    if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' })
+    const phone = normalizePhone(p.get('phone'))
+    if (!phone) return res.status(200).json({ ok: true, valid: false, taken: null })
+    const other = await findTrainerByPhone(phone, Number(p.get('id')) || null)
+    return res.status(200).json({ ok: true, valid: true, taken: other ? { id: other.id, name: other.name } : null })
+  }
+
   if (action === 'trainer-create' || action === 'trainer-update') {
     if (!isPost) return res.status(405).json({ ok: false })
     const b = bodyOf(req) as { id?: number; code?: string; name?: string; phone?: string; notes?: string; active?: boolean; login?: string; password?: string }
@@ -441,21 +453,30 @@ export default async function handler(req: Req, res: Res) {
     if (code !== undefined && !CODE_RE.test(code)) return res.status(400).json({ ok: false, error: 'code' })
     const login = b.login !== undefined ? String(b.login).trim().toLowerCase() || null : undefined
     if (login && !/^[a-z0-9_.@-]{3,64}$/.test(login)) return res.status(400).json({ ok: false, error: 'login' })
+    // номер: обязателен для нового тренера (вход по номеру), хранится как +77XXXXXXXXX, уникален
+    const rawPhone = b.phone !== undefined ? String(b.phone).trim() : undefined
+    const phone = rawPhone ? normalizePhone(rawPhone) : rawPhone === '' ? '' : undefined
+    if (rawPhone && !phone) return res.status(400).json({ ok: false, error: 'phone' })
+    if (action === 'trainer-create' && !phone) return res.status(400).json({ ok: false, error: 'phone_required' })
+    if (phone) {
+      const other = await findTrainerByPhone(phone, action === 'trainer-update' ? Number(b.id) || null : null)
+      if (other) return res.status(409).json({ ok: false, error: 'phone_taken', name: other.name })
+    }
     try {
       if (action === 'trainer-create') {
         if (!code || !b.name?.trim()) return res.status(400).json({ ok: false, error: 'fields' })
-        const t = await createTrainer({ code, name: String(b.name).trim(), phone: b.phone ? String(b.phone) : '', notes: b.notes ? String(b.notes) : '', login, passwordHash: b.password ? hashPassword(String(b.password)) : null })
+        const t = await createTrainer({ code, name: String(b.name).trim(), phone: phone || '', notes: b.notes ? String(b.notes) : '', login, passwordHash: b.password ? hashPassword(String(b.password)) : null })
         await logEvent({ type: 'trainer_created', props: { trainerId: t.id, code } })
         return res.status(200).json({ ok: true, trainer: t, link: `${SITE()}/t/${t.code}` })
       }
       const id = Number(b.id)
       if (!id) return res.status(400).json({ ok: false, error: 'id' })
-      const t = await updateTrainer(id, { code, name: b.name?.trim() || undefined, phone: b.phone !== undefined ? String(b.phone) : undefined, notes: b.notes !== undefined ? String(b.notes) : undefined, active: typeof b.active === 'boolean' ? b.active : undefined, login })
+      const t = await updateTrainer(id, { code, name: b.name?.trim() || undefined, phone: phone !== undefined ? phone || '' : undefined, notes: b.notes !== undefined ? String(b.notes) : undefined, active: typeof b.active === 'boolean' ? b.active : undefined, login })
       if (!t) return res.status(404).json({ ok: false, error: 'not_found' })
       return res.status(200).json({ ok: true, trainer: t, link: `${SITE()}/t/${t.code}` })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      if (/unique|duplicate/i.test(msg)) return res.status(409).json({ ok: false, error: /login/.test(msg) ? 'login_taken' : 'code_taken' })
+      if (/unique|duplicate/i.test(msg)) return res.status(409).json({ ok: false, error: /phone/.test(msg) ? 'phone_taken' : /login/.test(msg) ? 'login_taken' : 'code_taken' })
       throw e
     }
   }

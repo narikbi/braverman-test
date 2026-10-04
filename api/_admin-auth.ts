@@ -24,6 +24,16 @@ export function checkCredentials(login: string, password: string): boolean {
   return a && b
 }
 
+/** Вход владельца по номеру: ADMIN_PHONE (необязательно) + ADMIN_PASSWORD. */
+export function checkAdminPhone(phone: string, password: string): boolean {
+  const own = (process.env.ADMIN_PHONE || '').replace(/\D/g, '').slice(-10)
+  if (own.length !== 10) return false
+  const d = (s: string) => crypto.createHash('sha256').update(String(s), 'utf8').digest()
+  const a = crypto.timingSafeEqual(d(phone.replace(/\D/g, '').slice(-10)), d(own))
+  const b = crypto.timingSafeEqual(d(password), d(process.env.ADMIN_PASSWORD || ''))
+  return a && b
+}
+
 // ── Пароли тренеров: scrypt, формат "salt:hash" (hex) ──
 export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex')
