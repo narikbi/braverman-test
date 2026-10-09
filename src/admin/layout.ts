@@ -12,6 +12,7 @@ const NAV_ADMIN = [
   { hash: '#/', ic: '📊', label: 'Дашборд', match: 'dashboard' },
   { hash: '#/attempts', ic: '👥', label: 'Прохождения', short: 'Клиенты', match: 'attempts' },
   { hash: '#/payments', ic: '💳', label: 'Оплаты', match: 'payments' },
+  { hash: '#/chats', ic: '💬', label: 'Чаты', match: 'chats' },
   { hash: '#/trainers', ic: '🎓', label: 'Тренеры', match: 'trainers' },
   { hash: '#/health', ic: '🩺', label: 'Система', match: 'health' }
 ]

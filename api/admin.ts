@@ -130,6 +130,19 @@ export default async function handler(req: Req, res: Res) {
     return res.status(200).json({ ok: true, role: session.role, trainer: trainerMe, statuses: ATTEMPT_STATUSES, db: dbConfigured(), site: SITE(), price: PRICE(), seesPhone: seesPhone(session) })
   }
 
+  // Сессия виджета чатов WA Hub (только владелец): ключ проекта (WA_TOKEN) остаётся на сервере
+  if (action === 'wa-session') {
+    if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' })
+    const hub = process.env.WA_API_URL?.replace(/\/$/, '')
+    if (!hub || !process.env.WA_TOKEN) return res.status(200).json({ ok: false, error: 'wa_not_configured' })
+    try {
+      const r = await fetch(`${hub}/v1/session`, { method: 'POST', headers: { Authorization: `Bearer ${process.env.WA_TOKEN}` }, signal: AbortSignal.timeout(10000) })
+      const d = (await r.json()) as { token?: string }
+      if (!r.ok || !d.token) return res.status(200).json({ ok: false, error: 'hub_unavailable' })
+      return res.status(200).json({ ok: true, hub, token: d.token })
+    } catch { return res.status(200).json({ ok: false, error: 'hub_unavailable' }) }
+  }
+
   if (action === 'health') {
     if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' })
     const gw = process.env.KASPI_GW_URL?.replace(/\/$/, '')

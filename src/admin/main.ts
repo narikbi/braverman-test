@@ -12,6 +12,7 @@ import { openAttemptDrawer } from './pages/attempt-drawer'
 import { renderPayments } from './pages/payments'
 import { renderTrainers, renderTrainer } from './pages/trainers'
 import { renderHealth } from './pages/health'
+import { renderChats } from './pages/chats'
 import { toast } from './components/toast'
 import { L, forceAdminLang } from './i18n'
 
@@ -50,6 +51,7 @@ async function render() {
         return
       }
       case 'payments': if (!isAdmin()) return navigate('#/'); return await renderPayments(renderShell('payments', 'Оплаты', 'Счета Kaspi и их статусы'))
+      case 'chats': if (!isAdmin()) return navigate('#/'); return await renderChats(renderShell('chats', 'Чаты', 'WhatsApp-переписки с клиентами', false), route.phone)
       case 'trainers': if (!isAdmin()) return navigate('#/'); return await renderTrainers(renderShell('trainers', 'Тренеры', 'Партнёрские ссылки и их результаты'))
       case 'trainer': if (!isAdmin()) return navigate('#/'); return await renderTrainer(renderShell('trainer', 'Тренер', ''), route.id!)
       case 'health': if (!isAdmin()) return navigate('#/'); return await renderHealth(renderShell('health', 'Система', 'Состояние интеграций', false))
