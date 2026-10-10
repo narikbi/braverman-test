@@ -3,7 +3,7 @@
 // ссылку он пересылает вручную (результат по одному лишь номеру не раскрываем). RECOVER_DIRECT=1 — отдать сразу.
 import { dbConfigured, findPaidAttemptsByPhone, logEvent, ipHash, countRecent } from './_db.js'
 import { makeOtp, verifyOtp, makeResultToken } from './_access.js'
-import { sendWhatsApp, whatsappConfigured } from './_whatsapp.js'
+import { sendWhatsAppOtp } from './_whatsapp.js'
 import { otpMessage } from './_wa-text.js'
 import { bodyOf, normalizePhone, tgNotify, adminAttemptLink } from './_lib.js'
 import { resultLink } from './_fulfill.js'
@@ -48,8 +48,9 @@ export default async function handler(req: Req, res: Res) {
     return res.status(200).json({ ok: true, r: makeResultToken(latest.id) })
   }
 
-  if (whatsappConfigured()) {
-    const w = await sendWhatsApp(phone, otpMessage(makeOtp(phone), latest.lang))
+  {
+    const otp = makeOtp(phone)
+    const w = await sendWhatsAppOtp(phone, otp, latest.lang, otpMessage(otp, latest.lang))
     if (w.sent) return res.status(200).json({ ok: true, need_code: true })
   }
 

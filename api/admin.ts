@@ -10,7 +10,7 @@ import {
   listTrainers, getTrainer, createTrainer, updateTrainer, setTrainerPassword, findTrainerByLogin, touchTrainerLogin, createPrepaidAttempt,
   createTrainerSelfAttempt, trainerSelfAttempts, findTrainerByPhone
 } from './_db.js'
-import { sendWhatsApp, whatsappConfigured } from './_whatsapp.js'
+import { sendLinkTemplate, whatsappConfigured } from './_whatsapp.js'
 import { resultLinkMessage, prepaidLinkMessage } from './_wa-text.js'
 import { resultLink } from './_fulfill.js'
 import { kpaConfigured } from './_kpa.js'
@@ -323,7 +323,7 @@ export default async function handler(req: Req, res: Res) {
     const link = resultLink(id)
     let waSent = false
     if ((b.send || action === 'attempt-resend') && a.phone) {
-      waSent = (await sendWhatsApp(a.phone, resultLinkMessage(a.name, link, a.lang))).sent
+      waSent = (await sendLinkTemplate(a.phone, a.name, link, a.lang, resultLinkMessage(a.name, link, a.lang))).sent
       if (a.invoice_id) await setPaymentLinkSent(a.invoice_id, waSent)
     }
     await logEvent({ type: action === 'attempt-grant' ? 'access_granted' : 'link_resent', attemptId: id, props: { by: 'admin', waSent } })
@@ -351,7 +351,7 @@ export default async function handler(req: Req, res: Res) {
     const a = await createPrepaidAttempt({ phone, name, lang, amount, method, trainerCode, note: String(b.note || '').trim() })
     const link = prepaidLink(a.id)
     let waSent = false
-    if (b.send && whatsappConfigured()) waSent = (await sendWhatsApp(phone, prepaidLinkMessage(name, link, lang))).sent
+    if (b.send) waSent = (await sendLinkTemplate(phone, name, link, lang, prepaidLinkMessage(name, link, lang))).sent
     await logEvent({ type: 'prepaid_created', attemptId: a.id, trainerCode, props: { amount, method, waSent } })
     await tgNotify([
       '🧾 <b>ОПЛАТА ВНЕ САЙТА — тест Бравермана</b>',
@@ -381,7 +381,7 @@ export default async function handler(req: Req, res: Res) {
     const link = resultLink(id)
     let waSent = false
     if (b.send && a.phone && whatsappConfigured()) {
-      waSent = (await sendWhatsApp(a.phone, resultLinkMessage(a.name, link, a.lang))).sent
+      waSent = (await sendLinkTemplate(a.phone, a.name, link, a.lang, resultLinkMessage(a.name, link, a.lang))).sent
       if (a.invoice_id) await setPaymentLinkSent(a.invoice_id, waSent)
     }
     await logEvent({ type: 'access_granted', attemptId: id, props: { by: 'admin', amount, method, waSent, offline: true } })
@@ -404,7 +404,7 @@ export default async function handler(req: Req, res: Res) {
     if (!a || a.paid_by !== 'prepaid') return res.status(404).json({ ok: false, error: 'not_found' })
     if (a.dominant != null) return res.status(400).json({ ok: false, error: 'done' })
     if (!a.phone) return res.status(400).json({ ok: false, error: 'phone' })
-    const waSent = (await sendWhatsApp(a.phone, prepaidLinkMessage(a.name, prepaidLink(a.id), a.lang))).sent
+    const waSent = (await sendLinkTemplate(a.phone, a.name, prepaidLink(a.id), a.lang, prepaidLinkMessage(a.name, prepaidLink(a.id), a.lang))).sent
     await logEvent({ type: 'prepaid_link_sent', attemptId: a.id, props: { waSent } })
     return res.status(200).json({ ok: true, waSent })
   }

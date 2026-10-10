@@ -3,7 +3,7 @@
 // Идемпотентно: markPaid отмечает счёт оплаченным ровно один раз; неизвестный счёт игнорируется.
 import { markPaid, logEvent, setPaymentLinkSent, getAttempt, q } from './_db.js'
 import { makeResultToken } from './_access.js'
-import { sendWhatsApp, whatsappConfigured, fmtWaNumber } from './_whatsapp.js'
+import { sendLinkTemplate, whatsappConfigured, fmtWaNumber } from './_whatsapp.js'
 import { resultLinkMessage } from './_wa-text.js'
 import { tgNotify, adminAttemptLink, SITE, sheetMirror } from './_lib.js'
 import { blockedPairs } from '../shared/scoring.js'
@@ -55,8 +55,8 @@ export async function fulfillPaidInvoice(i: {
   // Ссылка клиенту в WhatsApp — остаётся в чате навсегда
   let waSent = false
   let waFrom = '' // номер пула wa-gateway, с которого ушло сообщение (номера чередуются)
-  if (phone && whatsappConfigured()) {
-    const w = await sendWhatsApp(phone, resultLinkMessage(attempt.name, link, attempt.lang))
+  if (phone) {
+    const w = await sendLinkTemplate(phone, attempt.name, link, attempt.lang, resultLinkMessage(attempt.name, link, attempt.lang))
     waSent = w.sent
     waFrom = w.from || ''
     await setPaymentLinkSent(i.invoiceId, waSent)
@@ -106,8 +106,8 @@ export async function fulfillRetake(a: AttemptRow, originalId: number): Promise<
   const link = resultLink(a.id)
   let waSent = false
   let waFrom = ''
-  if (a.phone && whatsappConfigured()) {
-    const w = await sendWhatsApp(a.phone, resultLinkMessage(a.name, link, a.lang))
+  if (a.phone) {
+    const w = await sendLinkTemplate(a.phone, a.name, link, a.lang, resultLinkMessage(a.name, link, a.lang))
     waSent = w.sent
     waFrom = w.from || ''
   }
@@ -133,8 +133,8 @@ export async function fulfillPrepaid(a: AttemptRow): Promise<void> {
   const link = resultLink(a.id)
   let waSent = false
   let waFrom = ''
-  if (a.phone && whatsappConfigured()) {
-    const w = await sendWhatsApp(a.phone, resultLinkMessage(a.name, link, a.lang))
+  if (a.phone) {
+    const w = await sendLinkTemplate(a.phone, a.name, link, a.lang, resultLinkMessage(a.name, link, a.lang))
     waSent = w.sent
     waFrom = w.from || ''
   }
