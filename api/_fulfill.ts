@@ -4,7 +4,6 @@
 import { markPaid, logEvent, setPaymentLinkSent, getAttempt, q } from './_db.js'
 import { makeResultToken } from './_access.js'
 import { sendLinkTemplate, whatsappConfigured, fmtWaNumber } from './_whatsapp.js'
-import { resultLinkMessage } from './_wa-text.js'
 import { tgNotify, adminAttemptLink, SITE, sheetMirror } from './_lib.js'
 import { blockedPairs } from '../shared/scoring.js'
 import type { AttemptRow } from './_db.js'
@@ -54,9 +53,9 @@ export async function fulfillPaidInvoice(i: {
 
   // Ссылка клиенту в WhatsApp — остаётся в чате навсегда
   let waSent = false
-  let waFrom = '' // номер пула wa-gateway, с которого ушло сообщение (номера чередуются)
+  let waFrom = '' // наш номер WhatsApp, с которого ушло сообщение
   if (phone) {
-    const w = await sendLinkTemplate(phone, attempt.name, link, attempt.lang, resultLinkMessage(attempt.name, link, attempt.lang))
+    const w = await sendLinkTemplate(phone, attempt.name, link, attempt.lang)
     waSent = w.sent
     waFrom = w.from || ''
     await setPaymentLinkSent(i.invoiceId, waSent)
@@ -107,7 +106,7 @@ export async function fulfillRetake(a: AttemptRow, originalId: number): Promise<
   let waSent = false
   let waFrom = ''
   if (a.phone) {
-    const w = await sendLinkTemplate(a.phone, a.name, link, a.lang, resultLinkMessage(a.name, link, a.lang))
+    const w = await sendLinkTemplate(a.phone, a.name, link, a.lang)
     waSent = w.sent
     waFrom = w.from || ''
   }
@@ -134,7 +133,7 @@ export async function fulfillPrepaid(a: AttemptRow): Promise<void> {
   let waSent = false
   let waFrom = ''
   if (a.phone) {
-    const w = await sendLinkTemplate(a.phone, a.name, link, a.lang, resultLinkMessage(a.name, link, a.lang))
+    const w = await sendLinkTemplate(a.phone, a.name, link, a.lang)
     waSent = w.sent
     waFrom = w.from || ''
   }

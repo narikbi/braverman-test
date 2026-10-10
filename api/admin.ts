@@ -11,7 +11,6 @@ import {
   createTrainerSelfAttempt, trainerSelfAttempts, findTrainerByPhone
 } from './_db.js'
 import { sendLinkTemplate, whatsappConfigured } from './_whatsapp.js'
-import { resultLinkMessage, prepaidLinkMessage } from './_wa-text.js'
 import { resultLink } from './_fulfill.js'
 import { kpaConfigured } from './_kpa.js'
 import { tgConfigured, tgNotify, SITE, PRICE, bodyOf, queryOf, normalizePhone, adminAttemptLink } from './_lib.js'
@@ -148,10 +147,11 @@ export default async function handler(req: Req, res: Res) {
     const gw = process.env.KASPI_GW_URL?.replace(/\/$/, '')
     const wa = process.env.WA_API_URL?.replace(/\/$/, '')
     const t0 = Date.now()
-    const [dbPing, kaspi, whatsapp, tg, last] = await Promise.all([
+    const [dbPing, kaspi, whatsapp, waMe, tg, last] = await Promise.all([
       q<{ one: number }>('ping', 'SELECT 1 AS one'),
       gw ? fetchJson(`${gw}/health`) : null,
       wa ? fetchJson(`${wa}/health`) : null,
+      wa && whatsappConfigured() ? fetchJson(`${wa}/v1/me`, { headers: { Authorization: `Bearer ${process.env.WA_TOKEN}` } }) : null,
       tgConfigured() ? tgStatus() : null,
       q<{ type: string; ts: string }>('last_events', `SELECT type, max(ts) AS ts FROM events WHERE type IN ('webhook_kpa','paid','invoice_created','quiz_start','page_view') GROUP BY type`)
     ])
@@ -163,7 +163,8 @@ export default async function handler(req: Req, res: Res) {
       checks: {
         db: { configured: dbConfigured(), ok: dbPing.length > 0, ms: Date.now() - t0 },
         kaspiGw: { configured: !!gw && kpaConfigured(), ok: !!kaspi?.ok, ms: kaspi?.ms ?? null, hasSession: !!kaspi?.data?.hasSession, cashier: kaspi?.data?.cashier ?? null, sessionSavedAt: kaspi?.data?.sessionSavedAt ?? null, url: gw ?? null },
-        wa: { configured: whatsappConfigured(), ok: !!whatsapp?.ok, ms: whatsapp?.ms ?? null, connected: !!whatsapp?.data?.connected, url: wa ?? null, numbers: (whatsapp?.data?.numbers as unknown[] | undefined) ?? [] },
+        // только официальный Cloud API: cloud — Meta подключена в хабе; number — номер проекта по умолчанию (для ответов из «Чатов»)
+        wa: { configured: whatsappConfigured(), ok: !!whatsapp?.ok, ms: whatsapp?.ms ?? null, cloud: !!whatsapp?.data?.cloud, number: (waMe?.data?.number as { phone: string; provider: string; display_name: string | null } | null | undefined) ?? null, url: wa ?? null },
         telegram: { configured: tgConfigured(), ok: !!tg?.ok, bot: tg?.bot ?? null, commandsOn: !!tg?.commandsOn, webhookUrl: tg?.webhookUrl ?? null, lastError: tg?.lastError ?? null }
       },
       last: { ...lastMap, sessionExpired: sessionLost[0]?.ts ?? null },
@@ -323,7 +324,7 @@ export default async function handler(req: Req, res: Res) {
     const link = resultLink(id)
     let waSent = false
     if ((b.send || action === 'attempt-resend') && a.phone) {
-      waSent = (await sendLinkTemplate(a.phone, a.name, link, a.lang, resultLinkMessage(a.name, link, a.lang))).sent
+      waSent = (await sendLinkTemplate(a.phone, a.name, link, a.lang)).sent
       if (a.invoice_id) await setPaymentLinkSent(a.invoice_id, waSent)
     }
     await logEvent({ type: action === 'attempt-grant' ? 'access_granted' : 'link_resent', attemptId: id, props: { by: 'admin', waSent } })
@@ -351,7 +352,7 @@ export default async function handler(req: Req, res: Res) {
     const a = await createPrepaidAttempt({ phone, name, lang, amount, method, trainerCode, note: String(b.note || '').trim() })
     const link = prepaidLink(a.id)
     let waSent = false
-    if (b.send) waSent = (await sendLinkTemplate(phone, name, link, lang, prepaidLinkMessage(name, link, lang))).sent
+    if (b.send) waSent = (await sendLinkTemplate(phone, name, link, lang)).sent
     await logEvent({ type: 'prepaid_created', attemptId: a.id, trainerCode, props: { amount, method, waSent } })
     await tgNotify([
       '🧾 <b>ОПЛАТА ВНЕ САЙТА — тест Бравермана</b>',
@@ -381,7 +382,7 @@ export default async function handler(req: Req, res: Res) {
     const link = resultLink(id)
     let waSent = false
     if (b.send && a.phone && whatsappConfigured()) {
-      waSent = (await sendLinkTemplate(a.phone, a.name, link, a.lang, resultLinkMessage(a.name, link, a.lang))).sent
+      waSent = (await sendLinkTemplate(a.phone, a.name, link, a.lang)).sent
       if (a.invoice_id) await setPaymentLinkSent(a.invoice_id, waSent)
     }
     await logEvent({ type: 'access_granted', attemptId: id, props: { by: 'admin', amount, method, waSent, offline: true } })
@@ -404,7 +405,7 @@ export default async function handler(req: Req, res: Res) {
     if (!a || a.paid_by !== 'prepaid') return res.status(404).json({ ok: false, error: 'not_found' })
     if (a.dominant != null) return res.status(400).json({ ok: false, error: 'done' })
     if (!a.phone) return res.status(400).json({ ok: false, error: 'phone' })
-    const waSent = (await sendLinkTemplate(a.phone, a.name, prepaidLink(a.id), a.lang, prepaidLinkMessage(a.name, prepaidLink(a.id), a.lang))).sent
+    const waSent = (await sendLinkTemplate(a.phone, a.name, prepaidLink(a.id), a.lang)).sent
     await logEvent({ type: 'prepaid_link_sent', attemptId: a.id, props: { waSent } })
     return res.status(200).json({ ok: true, waSent })
   }

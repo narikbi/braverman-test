@@ -4,7 +4,6 @@
 import { dbConfigured, findPaidAttemptsByPhone, logEvent, ipHash, countRecent } from './_db.js'
 import { makeOtp, verifyOtp, makeResultToken } from './_access.js'
 import { sendWhatsAppOtp } from './_whatsapp.js'
-import { otpMessage } from './_wa-text.js'
 import { bodyOf, normalizePhone, tgNotify, adminAttemptLink } from './_lib.js'
 import { resultLink } from './_fulfill.js'
 
@@ -48,11 +47,7 @@ export default async function handler(req: Req, res: Res) {
     return res.status(200).json({ ok: true, r: makeResultToken(latest.id) })
   }
 
-  {
-    const otp = makeOtp(phone)
-    const w = await sendWhatsAppOtp(phone, otp, latest.lang, otpMessage(otp, latest.lang))
-    if (w.sent) return res.status(200).json({ ok: true, need_code: true })
-  }
+  if ((await sendWhatsAppOtp(phone, makeOtp(phone), latest.lang)).sent) return res.status(200).json({ ok: true, need_code: true })
 
   // WhatsApp недоступен — просим владельца переслать ссылку вручную
   await logEvent({ type: 'recover_requested', attemptId: latest.id, sid, ipHash: ip, props: { phone } })

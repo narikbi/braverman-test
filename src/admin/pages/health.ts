@@ -6,7 +6,7 @@ type Health = {
   checks: {
     db: { configured: boolean; ok: boolean; ms: number }
     kaspiGw: { configured: boolean; ok: boolean; ms: number | null; hasSession: boolean; cashier: string | null; sessionSavedAt: string | null; url: string | null }
-    wa: { configured: boolean; ok: boolean; ms: number | null; connected: boolean; url: string | null; numbers: { number: string; connected: boolean; hasQr: boolean; sentToday: number; limit: number }[] }
+    wa: { configured: boolean; ok: boolean; ms: number | null; cloud: boolean; number: { phone: string; provider: string; display_name: string | null } | null; url: string | null }
     telegram: { configured: boolean; ok: boolean; bot: string | null; commandsOn: boolean; webhookUrl: string | null; lastError: string | null }
   }
   last: Record<string, string | null>
@@ -21,7 +21,8 @@ export async function renderHealth(page: HTMLElement) {
   const h = await adminGet<Health>('health')
   const c = h.checks
   const gwState = !c.kaspiGw.configured ? 'off' : !c.kaspiGw.ok ? 'bad' : c.kaspiGw.hasSession ? 'ok' : 'warn'
-  const waState = !c.wa.configured ? 'off' : !c.wa.ok ? 'bad' : c.wa.connected ? 'ok' : 'warn'
+  const waState = !c.wa.configured ? 'off' : !c.wa.ok || !c.wa.cloud ? 'bad' : c.wa.number?.provider === 'cloud' ? 'ok' : 'warn'
+  const waNum = c.wa.number
   page.innerHTML = `
     <div class="health">
       <div class="card hcard"><div class="title">Kaspi-шлюз ${dot(gwState)}</div>${kv([
@@ -34,10 +35,11 @@ export async function renderHealth(page: HTMLElement) {
       ])}${c.kaspiGw.url ? `<a class="btn btn-sm" href="${esc(c.kaspiGw.url)}" target="_blank" rel="noopener">Открыть шлюз</a>` : ''}</div>
 
       <div class="card hcard"><div class="title">WhatsApp ${dot(waState)}</div>${kv([
-        ['Подключение', !c.wa.configured ? 'не настроен — ссылки и коды не отправляются' : c.wa.connected ? 'есть номер с лимитом' : '<span style="color:var(--a-red)">нет доступного номера</span>'],
-        ['Ответ', c.wa.ms != null ? `${c.wa.ms} мс` : '—'],
-        ...c.wa.numbers.map(n => [`+${n.number}`, `${n.connected ? '<span style="color:var(--a-green)">подключён</span>' : n.hasQr ? '<span style="color:var(--a-amber)">ждёт QR</span>' : '<span style="color:var(--a-red)">нет связи</span>'} · ${n.sentToday}/${n.limit}`] as [string, string])
-      ])}${c.wa.url ? `<a class="btn btn-sm" href="${esc(c.wa.url)}/health" target="_blank" rel="noopener">Статус шлюза</a>` : ''}</div>
+        ['Канал', 'официальный WhatsApp Cloud API (шаблоны Meta)'],
+        ['Cloud API', !c.wa.configured ? 'не настроен — ссылки и коды не отправляются' : !c.wa.ok ? '<span style="color:var(--a-red)">WA Hub не отвечает</span>' : c.wa.cloud ? '<span style="color:var(--a-green)">подключён</span>' : '<span style="color:var(--a-red)">не подключён в WA Hub — сообщения не уходят</span>'],
+        ['Номер для «Чатов»', !waNum ? '—' : waNum.provider === 'cloud' ? `+${esc(waNum.phone)}${waNum.display_name ? ` · ${esc(waNum.display_name)}` : ''}` : '<span style="color:var(--a-amber)">неофициальный пул — ответы из «Чатов» уйдут через пул</span>'],
+        ['Ответ', c.wa.ms != null ? `${c.wa.ms} мс` : '—']
+      ])}</div>
 
       <div class="card hcard"><div class="title">База данных ${dot(!c.db.configured ? 'off' : c.db.ok ? 'ok' : 'bad')}</div>${kv([
         ['Neon', c.db.configured ? (c.db.ok ? 'работает' : '<span style="color:var(--a-red)">нет ответа</span>') : 'не подключена'],
