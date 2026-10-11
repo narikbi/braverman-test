@@ -13,6 +13,8 @@ function apiDevPlugin(): Plugin {
       server.middlewares.use((req, res, nextFn) => {
         if (req.url && /^\/admin\/?(\?|$)/.test(req.url)) {
           req.url = req.url.replace(/^\/admin\/?/, '/admin.html')
+        } else if (req.url && /^\/privacy\/?(\?|$)/.test(req.url)) {
+          req.url = req.url.replace(/^\/privacy\/?/, '/privacy.html')
         } else if (req.url) {
           const m = /^\/t\/([A-Za-z0-9_-]{2,32})\/?(\?.*)?$/.exec(req.url)
           if (m) {
@@ -87,7 +89,8 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: {
           main: resolve(__dirname, 'index.html'),
-          admin: resolve(__dirname, 'admin.html')
+          admin: resolve(__dirname, 'admin.html'),
+          privacy: resolve(__dirname, 'privacy.html')
         }
       }
     },

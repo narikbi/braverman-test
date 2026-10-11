@@ -15,6 +15,7 @@ export type UiText = {
   authorRole: string
   authorVideoRole: string
   disclaimer: string
+  privacyLink: string
   prepaidNote: string
   retake: {
     title: string

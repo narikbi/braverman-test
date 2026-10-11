@@ -54,6 +54,7 @@ export function renderCheckout(opts: { loading?: boolean; keepPhone?: boolean } 
 
       <ul class="benefits">${u.benefits.map(b => `<li>${esc(b)}</li>`).join('')}</ul>
       ${authorRow('author-laugh.webp', T().ui.authorVideoRole)}
+      <a href="/privacy" class="privacy-link">${esc(T().ui.privacyLink)}</a>
     </div>`
   showScreen('checkout')
   // Условный ровный график (не баллы человека) под сильным размытием — форма ничего не выдаёт

@@ -46,6 +46,7 @@ export function applyStatic() {
   $('t-startHint').textContent = u.startHint
   $('recoverLink').textContent = u.recoverLink
   $('t-disclaimer').textContent = u.disclaimer
+  $('t-privacy').textContent = u.privacyLink
   $('prepaidNote').textContent = u.prepaidNote
 
   $('backBtn').textContent = u.back
