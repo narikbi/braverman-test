@@ -142,6 +142,18 @@ export default async function handler(req: Req, res: Res) {
     } catch { return res.status(200).json({ ok: false, error: 'hub_unavailable' }) }
   }
 
+  // Метки для списка чатов WA Hub: кто из номеров оплатил тест
+  if (action === 'wa-tags') {
+    if (!isPost) return res.status(405).json({ ok: false })
+    if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' })
+    const phones = ((bodyOf(req) as { phones?: unknown }).phones as unknown[] | undefined ?? []).map(p => String(p).replace(/\D/g, '')).filter(p => /^7\d{10}$/.test(p)).slice(0, 200)
+    if (!phones.length) return res.status(200).json({ ok: true, tags: {} })
+    const rows = await q<{ phone: string }>('wa_tags', `SELECT DISTINCT phone FROM attempts WHERE status = 'paid' AND phone = ANY($1)`, [phones.map(p => '+' + p)])
+    const tags: Record<string, { text: string; color: string }> = {}
+    for (const r of rows) tags[r.phone.replace(/\D/g, '')] = { text: 'Тест', color: '#00a884' }
+    return res.status(200).json({ ok: true, tags })
+  }
+
   if (action === 'health') {
     if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' })
     const gw = process.env.KASPI_GW_URL?.replace(/\/$/, '')

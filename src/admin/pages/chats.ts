@@ -1,5 +1,5 @@
 // Чаты WhatsApp — виджет из WA Hub. Скрипт и стили грузятся с хаба, сессию выдаёт наш бэкенд (action=wa-session).
-import { adminGet } from '../api'
+import { adminGet, adminPost } from '../api'
 
 type WaSession = { hub: string; token: string }
 declare global { interface Window { WaHub?: { mount: (el: HTMLElement, o: object) => { open: (phone: string) => void; destroy: () => void } } } }
@@ -31,6 +31,7 @@ export async function renderChats(page: HTMLElement, phone?: string) {
   widget = window.WaHub!.mount(page.querySelector('#wa-chats')!, {
     hub: first.hub,
     openPhone: phone,
+    tags: async (phones: string[]) => (await adminPost<{ tags: Record<string, { text: string; color: string }> }>('wa-tags', { phones })).tags,
     session: async () => { if (cached) { const t = cached; cached = null; return t } return (await adminGet<WaSession>('wa-session')).token }
   })
 }
