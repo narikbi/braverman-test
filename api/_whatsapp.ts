@@ -7,6 +7,8 @@ export function whatsappConfigured(): boolean {
   return !!(process.env.WA_API_URL && process.env.WA_TOKEN)
 }
 
+import { firstName } from './_name.js'
+
 export type WaResult = { sent: boolean; from?: string } // from — наш номер, с которого ушло (77XXXXXXXXX)
 
 /** +7 775 258 86 00 — для уведомлений */
@@ -52,7 +54,7 @@ export async function sendLinkTemplate(phone: string, name: string, link: string
   return sendTemplate(phone, name, {
     name: m[1] === 'r' ? 'braverman_result' : 'braverman_prepaid',
     lang: tplLang(lang),
-    params: [name || (kk ? 'дос' : 'друг')],
+    params: [firstName(name) || (kk ? 'дос' : 'друг')], // обращаемся по имени, а не по ФИО
     buttonUrl: m[2],
     text: `${name ? name + ', ' : ''}${what}: ${link}` // как сообщение выглядит в чатах хаба
   })
