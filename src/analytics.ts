@@ -1,5 +1,7 @@
 // Пиксели Meta/TikTok + серверная воронка (beacon → /api/track).
 // ID пикселей — из env при сборке: VITE_META_PIXEL_ID, VITE_TIKTOK_PIXEL_ID (пусто — не грузим).
+// Адрес страницы уходит в пиксель целиком, поэтому на страницах с личным ключом в адресе
+// (?r= — результат, ?p= — тест, оплаченный вне сайта) пиксели не грузим и событий в них не шлём.
 import { getAttr } from './attribution'
 
 declare global {
@@ -18,9 +20,14 @@ export function setAttemptRef(ref: { id: number; token: string } | null) {
   attemptRef = ref && ref.id > 0 && ref.token ? ref : null
 }
 
+/** В адресе личный ключ доступа — его нельзя отдавать рекламным пикселям. */
+const hasAccessKey = () => /[?&][rp]=/.test(location.search)
+
 export function initAnalytics() {
-  if (META_ID) initMeta(META_ID)
-  if (TT_ID) initTikTok(TT_ID)
+  if (!hasAccessKey()) {
+    if (META_ID) initMeta(META_ID)
+    if (TT_ID) initTikTok(TT_ID)
+  }
   beacon({ type: 'page_view', path: location.pathname + location.search })
 }
 
@@ -62,10 +69,11 @@ function beacon(e: { type: string; step?: number; path?: string }) {
 const META_STANDARD = new Set(['Lead', 'Purchase', 'InitiateCheckout'])
 
 export function track(event: string, params?: Record<string, unknown>) {
-  if (window.fbq) {
+  // после оплаты адрес меняется на /?r=… — дальше в пиксели ничего не шлём
+  if (window.fbq && !hasAccessKey()) {
     META_STANDARD.has(event) ? window.fbq('track', event, params) : window.fbq('trackCustom', event, params)
   }
-  if (window.ttq) {
+  if (window.ttq && !hasAccessKey()) {
     const ttMap: Record<string, string> = { Lead: 'SubmitForm', Purchase: 'CompletePayment', InitiateCheckout: 'InitiateCheckout' }
     window.ttq.track(ttMap[event] || event, params)
   }
@@ -89,11 +97,13 @@ function initMeta(id: string) {
   n.loaded = true
   n.version = '2.0'
   n.queue = []
+  ;(n as unknown as { disablePushState: boolean }).disablePushState = true // без авто-PageView при смене адреса на /?r=…
   w.fbq = n
   const s = document.createElement('script')
   s.async = true
   s.src = 'https://connect.facebook.net/en_US/fbevents.js'
   document.head.appendChild(s)
+  window.fbq!('set', 'autoConfig', false, id) // без автособытий по кликам — только наши события
   window.fbq!('init', id)
   window.fbq!('track', 'PageView')
 }
