@@ -2,7 +2,7 @@
 // Цифры — те же, что в админке (api/_stats.ts). Бот отвечает только в чате TG_CHAT_ID.
 // Подключение: админка → Система → «Подключить команды бота» (setWebhook + setMyCommands).
 import crypto from 'node:crypto'
-import { tgCall, SITE } from './_lib.js'
+import { tgCall, SITE, sourceLabel } from './_lib.js'
 import { rangeFor, kpi, funnelCounts, sourcesStats, trainersStats, recentPaid, ALL, FUNNEL_TYPES, FUNNEL_LABELS, type Kpi } from './_stats.js'
 
 // ── вебхук ──
@@ -158,8 +158,10 @@ export async function paymentsReport(limit = 10): Promise<string> {
   const out = [`🧾 <b>Последние оплаты</b> <i>(${rows.length})</i>`, '']
   for (const r of rows) {
     const via = r.provider === 'manual' ? `вручную${r.method ? ` · ${r.method}` : ''}` : ''
-    const from = [via, r.trainer_code ? `тренер ${r.trainer_code}` : r.source || (via ? '' : 'прямой')].filter(Boolean).join(' · ')
-    out.push(`${dmt(r.paid_at)} · <b>${money(r.amount)}</b>${r.test_amount ? ' <i>(тест)</i>' : ''} · ${esc(r.name || '—')} · <code>${esc(r.phone)}</code> · ${esc(from)}`)
+    // sourceLabel уже экранирован для HTML
+    const src = via ? '' : sourceLabel(r)
+    const from = [esc(via), r.trainer_code ? `тренер ${esc(r.trainer_code)}` : '', src].filter(Boolean).join(' · ')
+    out.push(`${dmt(r.paid_at)} · <b>${money(r.amount)}</b>${r.test_amount ? ' <i>(тест)</i>' : ''} · ${esc(r.name || '—')} · <code>${esc(r.phone)}</code>${from ? ` · ${from}` : ''}`)
   }
   out.push('', `🛠 ${SITE()}/admin#/payments`)
   return out.join('\n')

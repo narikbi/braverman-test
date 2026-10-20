@@ -4,7 +4,7 @@
 import { markPaid, logEvent, setPaymentLinkSent, getAttempt, q } from './_db.js'
 import { makeResultToken } from './_access.js'
 import { sendLinkTemplate, whatsappConfigured, fmtWaNumber } from './_whatsapp.js'
-import { tgNotify, adminAttemptLink, SITE, sheetMirror } from './_lib.js'
+import { tgNotify, adminAttemptLink, SITE, sheetMirror, sourceLine } from './_lib.js'
 import { blockedPairs } from '../shared/scoring.js'
 import type { AttemptRow } from './_db.js'
 
@@ -74,6 +74,7 @@ export async function fulfillPaidInvoice(i: {
     full?.dominant ? `🧠 ${comboLabel(full.dominant, full.combo)}` : '',
     full && blockedLabel(full) ? `⚠️ Заблокированность отделов: ${blockedLabel(full)} — клиенту предложена бесплатная пересдача` : '',
     trainer ? `🎓 Тренер: ${trainer.name} (${trainer.code})` : attempt.trainer_code ? `🎓 Код тренера: ${attempt.trainer_code} (неизвестен)` : '',
+    full ? sourceLine(full) : '',
     `🧾 Счёт #${i.invoiceId} · ${i.source}`,
     `🔗 ${link}`,
     adminAttemptLink(attempt.id),

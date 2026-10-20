@@ -30,6 +30,28 @@ export async function tgNotify(lines: (string | false | null | undefined)[]): Pr
   }
 }
 
+const tgEsc = (s: string) => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]!))
+
+/**
+ * Откуда пришёл клиент — для Telegram: «youtube / podcast · narikbi_live · 4UpMCaYnnLw».
+ * Без UTM — сайт-источник по рефереру; по ссылке тренера — '' (тренер и так в отдельной строке).
+ */
+export function sourceLabel(a: { utm?: Record<string, string> | null; referrer?: string | null; trainer_code?: string | null }): string {
+  const u = a.utm || {}
+  if (u.utm_source || u.utm_medium || u.utm_campaign) {
+    const head = [u.utm_source, u.utm_medium].filter(Boolean).join(' / ')
+    return tgEsc([head, u.utm_campaign, u.utm_content].filter(Boolean).join(' · '))
+  }
+  if (a.referrer) {
+    try { return tgEsc(`${new URL(a.referrer).host.replace(/^www\./, '')} (без UTM)`) } catch { /* битый реферер */ }
+  }
+  return a.trainer_code ? '' : 'прямой заход'
+}
+export const sourceLine = (a: Parameters<typeof sourceLabel>[0]) => {
+  const s = sourceLabel(a)
+  return s ? `📣 Источник: ${s}` : ''
+}
+
 export const adminAttemptLink = (id: number | null | undefined) => (id ? `🛠 ${SITE()}/admin#/attempts/${id}` : '')
 
 // ── Google-таблица: необязательное зеркало через Apps Script (SHEET_ENDPOINT). Основной источник — админка. ──

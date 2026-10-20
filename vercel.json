@@ -10,6 +10,11 @@
   },
   "redirects": [
     {
+      "source": "/podcast",
+      "destination": "/?utm_source=youtube&utm_medium=podcast&utm_campaign=narikbi_live&utm_content=4UpMCaYnnLw",
+      "permanent": false
+    },
+    {
       "source": "/t/:code",
       "destination": "/?t=:code",
       "permanent": false
