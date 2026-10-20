@@ -67,7 +67,7 @@ export default async function handler(req: Req, res: Res) {
     await tgNotify([
       '🧾 <b>Новый счёт — тест Бравермана</b>',
       `👤 ${attempt.name || '—'}`, `📱 <code>${phone}</code>`, `💵 ${amount} ₸${testAmount ? ' (тест)' : ''}`,
-      attempt.trainer_code ? `🎓 ${attempt.trainer_code}` : '', sourceLine(attempt), adminAttemptLink(id)
+      attempt.trainer_code ? `🎓 ${attempt.trainer_code}` : '', await sourceLine(attempt), adminAttemptLink(id)
     ])
     return res.status(200).json({ ok: true, invoiceId: inv.id })
   } catch (e) {

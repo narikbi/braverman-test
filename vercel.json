@@ -15,6 +15,11 @@
       "permanent": false
     },
     {
+      "source": "/yt/:id",
+      "destination": "/?utm_source=youtube&utm_medium=video&utm_campaign=:id",
+      "permanent": false
+    },
+    {
       "source": "/podcast/:name/:episode",
       "destination": "/?utm_source=youtube&utm_medium=podcast&utm_campaign=:name&utm_content=:episode",
       "permanent": false

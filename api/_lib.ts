@@ -32,23 +32,54 @@ export async function tgNotify(lines: (string | false | null | undefined)[]): Pr
 
 const tgEsc = (s: string) => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]!))
 
+export const YT_ID = /^[A-Za-z0-9_-]{11}$/
+const ytCache = new Map<string, string>()
+
+/** «Название ролика» — Канал по ID видео YouTube (oEmbed, без ключа API); не нашли — null. */
+export async function youtubeTitle(id: string): Promise<string | null> {
+  if (!YT_ID.test(id)) return null
+  const hit = ytCache.get(id)
+  if (hit) return hit
+  try {
+    const r = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}`, { signal: AbortSignal.timeout(3000) })
+    if (!r.ok) return null
+    const d = (await r.json()) as { title?: string; author_name?: string }
+    if (!d.title) return null
+    const t = `«${d.title}»${d.author_name ? ` — ${d.author_name}` : ''}`
+    ytCache.set(id, t)
+    return t
+  } catch {
+    return null
+  }
+}
+
+/** ID видео YouTube в метках (braverman.kz/yt/<id> или utm_content подкаста) — если источник YouTube. */
+export function youtubeIdOf(utm: Record<string, string> | null | undefined): string | null {
+  if (!utm || !/youtu/i.test(utm.utm_source || '')) return null
+  return [utm.utm_campaign, utm.utm_content].find(v => !!v && YT_ID.test(v)) ?? null
+}
+
 /**
- * Откуда пришёл клиент — для Telegram: «youtube / podcast · narikbi_live · 4UpMCaYnnLw».
- * Без UTM — сайт-источник по рефереру; по ссылке тренера — '' (тренер и так в отдельной строке).
+ * Откуда пришёл клиент — для Telegram (уже экранировано для HTML):
+ * «youtube / video · 4UpMCaYnnLw · «Название ролика» — Канал». Без UTM — сайт по рефереру;
+ * по ссылке тренера — '' (тренер и так в отдельной строке).
  */
-export function sourceLabel(a: { utm?: Record<string, string> | null; referrer?: string | null; trainer_code?: string | null }): string {
+export async function sourceLabel(a: { utm?: Record<string, string> | null; referrer?: string | null; trainer_code?: string | null }): Promise<string> {
   const u = a.utm || {}
   if (u.utm_source || u.utm_medium || u.utm_campaign) {
     const head = [u.utm_source, u.utm_medium].filter(Boolean).join(' / ')
-    return tgEsc([head, u.utm_campaign, u.utm_content].filter(Boolean).join(' · '))
+    const label = tgEsc([head, u.utm_campaign, u.utm_content].filter(Boolean).join(' · '))
+    const yt = youtubeIdOf(u)
+    const title = yt ? await youtubeTitle(yt) : null
+    return title ? `${label} · ${tgEsc(title)}` : label
   }
   if (a.referrer) {
     try { return tgEsc(`${new URL(a.referrer).host.replace(/^www\./, '')} (без UTM)`) } catch { /* битый реферер */ }
   }
   return a.trainer_code ? '' : 'прямой заход'
 }
-export const sourceLine = (a: Parameters<typeof sourceLabel>[0]) => {
-  const s = sourceLabel(a)
+export async function sourceLine(a: Parameters<typeof sourceLabel>[0]): Promise<string> {
+  const s = await sourceLabel(a)
   return s ? `📣 Источник: ${s}` : ''
 }
 
