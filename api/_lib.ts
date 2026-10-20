@@ -80,7 +80,7 @@ export async function sourceLabel(a: { utm?: Record<string, string> | null; refe
 }
 export async function sourceLine(a: Parameters<typeof sourceLabel>[0]): Promise<string> {
   const s = await sourceLabel(a)
-  return s ? `📣 Источник: ${s}` : ''
+  return s ? `📣 ${s}` : ''
 }
 
 export const adminAttemptLink = (id: number | null | undefined) => (id ? `🛠 ${SITE()}/admin#/attempts/${id}` : '')
