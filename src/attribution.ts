@@ -1,7 +1,7 @@
 // Атрибуция визита: UTM и код тренера (?t=) — last-touch, реферер и лендинг — first-touch.
 // Живёт в localStorage (bt_attr), уходит на сервер с каждым событием и с попыткой.
 const KEY = 'bt_attr'
-const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'utm_placement'] // utm_placement — {{placement}} из Meta Ads
 
 export type Attr = { utm: Record<string, string>; t: string | null; referrer: string | null; landing: string | null }
 

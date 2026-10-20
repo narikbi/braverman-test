@@ -59,16 +59,21 @@ export function youtubeIdOf(utm: Record<string, string> | null | undefined): str
   return [utm.utm_campaign, utm.utm_content].find(v => !!v && YT_ID.test(v)) ?? null
 }
 
+type SourceOf = { utm?: Record<string, string> | null; referrer?: string | null; trainer_code?: string | null }
+
+/** Платная реклама (таргет): utm_medium = target / paid / cpc / ads … — показываем кампанию, группу, объявление. */
+export const isAdMedium = (m: string | undefined) => !!m && /^(target|таргет|paid|cpc|cpm|cpa|ads?|paid[_-]?social|ppc)/i.test(m)
+
 /**
- * Откуда пришёл клиент — для Telegram (уже экранировано для HTML):
- * «youtube / video · 4UpMCaYnnLw · «Название ролика» — Канал». Без UTM — сайт по рефереру;
- * по ссылке тренера — '' (тренер и так в отдельной строке).
+ * Откуда пришёл клиент, одной строкой (уже экранировано для HTML):
+ * «youtube / video · 4UpMCaYnnLw · «Название ролика» — Канал», «instagram / target · Кампания · Группа · Объявление».
+ * Без UTM — сайт по рефереру; по ссылке тренера — '' (тренер и так в отдельной строке).
  */
-export async function sourceLabel(a: { utm?: Record<string, string> | null; referrer?: string | null; trainer_code?: string | null }): Promise<string> {
+export async function sourceLabel(a: SourceOf): Promise<string> {
   const u = a.utm || {}
   if (u.utm_source || u.utm_medium || u.utm_campaign) {
     const head = [u.utm_source, u.utm_medium].filter(Boolean).join(' / ')
-    const label = tgEsc([head, u.utm_campaign, u.utm_content].filter(Boolean).join(' · '))
+    const label = tgEsc([head, u.utm_campaign, u.utm_term, u.utm_content, u.utm_placement].filter(Boolean).join(' · '))
     const yt = youtubeIdOf(u)
     const title = yt ? await youtubeTitle(yt) : null
     return title ? `${label} · ${tgEsc(title)}` : label
@@ -78,7 +83,20 @@ export async function sourceLabel(a: { utm?: Record<string, string> | null; refe
   }
   return a.trainer_code ? '' : 'прямой заход'
 }
-export async function sourceLine(a: Parameters<typeof sourceLabel>[0]): Promise<string> {
+
+/**
+ * Строка(и) источника для уведомлений. У рекламы — подробности отдельными строками
+ * (в Ads Manager их подставляют {{campaign.name}}, {{adset.name}}, {{ad.name}}, {{placement}}).
+ */
+export async function sourceLine(a: SourceOf): Promise<string> {
+  const u = a.utm || {}
+  if (isAdMedium(u.utm_medium)) {
+    const rows = [
+      ['кампания', u.utm_campaign], ['группа', u.utm_term], ['объявление', u.utm_content], ['плейсмент', u.utm_placement]
+    ].filter(([, v]) => v).map(([k, v]) => `   ▸ ${k}: ${tgEsc(v!)}`)
+    const head = tgEsc([u.utm_source, u.utm_medium].filter(Boolean).join(' / '))
+    return [`📣 ${head}${rows.length ? '' : ' · <i>названий кампании и объявления в ссылке нет</i>'}`, ...rows].join('\n')
+  }
   const s = await sourceLabel(a)
   return s ? `📣 ${s}` : ''
 }

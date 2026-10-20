@@ -2,7 +2,7 @@
 // Цифры — те же, что в админке (api/_stats.ts). Бот отвечает только в чате TG_CHAT_ID.
 // Подключение: админка → Система → «Подключить команды бота» (setWebhook + setMyCommands).
 import crypto from 'node:crypto'
-import { tgCall, SITE, sourceLabel, youtubeIdOf, youtubeTitle } from './_lib.js'
+import { tgCall, SITE, sourceLabel, youtubeIdOf, youtubeTitle, isAdMedium } from './_lib.js'
 import { rangeFor, kpi, funnelCounts, sourcesStats, trainersStats, recentPaid, ALL, FUNNEL_TYPES, FUNNEL_LABELS, type Kpi } from './_stats.js'
 
 // ── вебхук ──
@@ -134,12 +134,14 @@ export async function periodReport(p: Preset): Promise<string> {
   const agg = new Map<string, { views: number; paid: number; revenue: number; yt: string | null }>()
   for (const s of src) {
     const yt = youtubeIdOf({ utm_source: s.source, utm_campaign: s.campaign, utm_content: s.content })
-    const key = [s.source, s.medium].filter(Boolean).join(' / ') + (s.campaign ? ` · ${s.campaign}` : '') + (yt && yt !== s.campaign ? ` · ${yt}` : '')
+    // у рекламы объявлений много — каждое отдельной строкой (utm_content), у остального content сворачиваем
+    const ad = isAdMedium(s.medium) && s.content ? ` · ${s.content}` : ''
+    const key = [s.source, s.medium].filter(Boolean).join(' / ') + (s.campaign ? ` · ${s.campaign}` : '') + ad + (yt && yt !== s.campaign && !ad ? ` · ${yt}` : '')
     const a = agg.get(key) ?? { views: 0, paid: 0, revenue: 0, yt }
     a.views += s.views; a.paid += s.paid; a.revenue += s.revenue
     agg.set(key, a)
   }
-  const srcTop = [...agg.entries()].filter(([, a]) => a.views || a.paid).sort((a, b) => b[1].revenue - a[1].revenue || b[1].paid - a[1].paid || b[1].views - a[1].views).slice(0, 6)
+  const srcTop = [...agg.entries()].filter(([, a]) => a.views || a.paid).sort((a, b) => b[1].revenue - a[1].revenue || b[1].paid - a[1].paid || b[1].views - a[1].views).slice(0, 8)
   if (srcTop.length) {
     const titles = await Promise.all(srcTop.map(([, a]) => (a.yt ? youtubeTitle(a.yt) : null)))
     out.push('', '<b>Источники</b>')

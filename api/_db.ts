@@ -66,7 +66,7 @@ export type Attribution = {
   landing?: string | null
 }
 
-const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'utm_placement'] // utm_placement — {{placement}} из Meta Ads
 
 /** Чистим то, что прислал клиент: только известные ключи, длины ограничены. */
 export function cleanAttribution(a: unknown): Required<Attribution> {
