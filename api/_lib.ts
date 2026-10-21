@@ -79,7 +79,7 @@ export async function sourceLabel(a: SourceOf): Promise<string> {
     return title ? `${label} · ${tgEsc(title)}` : label
   }
   if (a.referrer) {
-    try { return tgEsc(`${new URL(a.referrer).host.replace(/^www\./, '')} (без UTM)`) } catch { /* битый реферер */ }
+    try { return tgEsc(`${new URL(a.referrer).host.replace(/^www\./, '')} · ссылка без метки — какое видео или пост, не видно`) } catch { /* битый реферер */ }
   }
   return a.trainer_code ? '' : 'прямой заход'
 }
