@@ -2,7 +2,7 @@
 // Цифры — те же, что в админке (api/_stats.ts). Бот отвечает только в чате TG_CHAT_ID.
 // Подключение: админка → Система → «Подключить команды бота» (setWebhook + setMyCommands).
 import crypto from 'node:crypto'
-import { tgCall, SITE, sourceLabel, youtubeIdOf, youtubeTitle, isAdMedium, oldLinkLabel } from './_lib.js'
+import { tgCall, SITE, sourceParts, formatSource, utmParts, youtubeIdOf, youtubeTitle, isAdMedium } from './_lib.js'
 import { rangeFor, kpi, funnelCounts, sourcesStats, trainersStats, recentPaid, ALL, FUNNEL_TYPES, FUNNEL_LABELS, type Kpi } from './_stats.js'
 
 // ── вебхук ──
@@ -130,23 +130,32 @@ export async function periodReport(p: Preset): Promise<string> {
     `начали → прошли тест: ${k.convStartFinish}%`)
 
   // источники: сворачиваем utm_content, сортируем по выручке
-  // ролики YouTube (braverman.kz/yt/<id>) различаем по ID, поэтому он в ключе; дальше подставим название
-  const agg = new Map<string, { views: number; paid: number; revenue: number; yt: string | null }>()
+  // ролики YouTube (braverman.kz/yt/<id>) различаем по ID; у рекламы каждое объявление отдельно (utm_content),
+  // у остального content сворачиваем. Каждый источник — блоком: заголовок, подробности, цифры.
+  type Agg = { utm: Record<string, string>; yt: string | null; views: number; paid: number; revenue: number }
+  const agg = new Map<string, Agg>()
   for (const s of src) {
     const yt = youtubeIdOf({ utm_source: s.source, utm_campaign: s.campaign, utm_content: s.content })
-    // у рекламы объявлений много — каждое отдельной строкой (utm_content), у остального content сворачиваем
-    const ad = isAdMedium(s.medium) && s.content ? ` · ${s.content}` : ''
-    const key = s.source === 'old_link' ? oldLinkLabel(s.medium)
-      : [s.source, s.medium].filter(Boolean).join(' / ') + (s.campaign ? ` · ${s.campaign}` : '') + ad + (yt && yt !== s.campaign && !ad ? ` · ${yt}` : '')
-    const a = agg.get(key) ?? { views: 0, paid: 0, revenue: 0, yt }
+    const keepContent = (isAdMedium(s.medium) || s.content === yt) && s.content
+    const utm: Record<string, string> = { utm_source: s.source }
+    if (s.medium) utm.utm_medium = s.medium
+    if (s.campaign) utm.utm_campaign = s.campaign
+    if (keepContent) utm.utm_content = s.content
+    const key = JSON.stringify(utm)
+    const a = agg.get(key) ?? { utm, yt, views: 0, paid: 0, revenue: 0 }
     a.views += s.views; a.paid += s.paid; a.revenue += s.revenue
     agg.set(key, a)
   }
-  const srcTop = [...agg.entries()].filter(([, a]) => a.views || a.paid).sort((a, b) => b[1].revenue - a[1].revenue || b[1].paid - a[1].paid || b[1].views - a[1].views).slice(0, 8)
+  const srcTop = [...agg.values()].filter(a => a.views || a.paid).sort((a, b) => b.revenue - a.revenue || b.paid - a.paid || b.views - a.views).slice(0, 8)
   if (srcTop.length) {
-    const titles = await Promise.all(srcTop.map(([, a]) => (a.yt ? youtubeTitle(a.yt) : null)))
+    const titles = await Promise.all(srcTop.map(a => (a.yt ? youtubeTitle(a.yt) : null)))
     out.push('', '<b>Источники</b>')
-    srcTop.forEach(([key, a], i) => out.push(`${esc(key)}${titles[i] ? ` · ${esc(titles[i])}` : ''} — ${num(a.views)} виз. · ${num(a.paid)} опл. · ${money(a.revenue)}`))
+    srcTop.forEach((a, i) => {
+      // тренерские и прямые заходы приходят из SQL как готовые подписи («тренер:код», «(прямые)»)
+      const parts = a.utm.utm_medium || a.utm.utm_campaign || a.utm.utm_source === 'old_link' ? utmParts(a.utm, titles[i]) : { head: esc(a.utm.utm_source), rows: [] }
+      out.push(formatSource(parts, '▫️', '     '))
+      out.push(`     ${num(a.views)} виз. · ${num(a.paid)} опл. · ${money(a.revenue)}`)
+    })
   }
   const trTop = tr.rows.filter(t => t.paid || t.started || t.visits).slice(0, 6)
   if (trTop.length) {
@@ -164,12 +173,13 @@ export async function paymentsReport(limit = 10): Promise<string> {
   const out = [`🧾 <b>Последние оплаты</b> <i>(${rows.length})</i>`, '']
   for (const r of rows) {
     const via = r.provider === 'manual' ? `вручную${r.method ? ` · ${r.method}` : ''}` : ''
-    // sourceLabel уже экранирован для HTML
-    const src = via ? '' : await sourceLabel(r)
-    const from = [esc(via), r.trainer_code ? `тренер ${esc(r.trainer_code)}` : '', src].filter(Boolean).join(' · ')
-    out.push(`${dmt(r.paid_at)} · <b>${money(r.amount)}</b>${r.test_amount ? ' <i>(тест)</i>' : ''} · ${esc(r.name || '—')} · <code>${esc(r.phone)}</code>${from ? ` · ${from}` : ''}`)
+    out.push(`${dmt(r.paid_at)} · <b>${money(r.amount)}</b>${r.test_amount ? ' <i>(тест)</i>' : ''} · ${esc(r.name || '—')} · <code>${esc(r.phone)}</code>`)
+    if (via) out.push(`   💳 ${esc(via)}`)
+    if (r.trainer_code) out.push(`   🎓 тренер ${esc(r.trainer_code)}`)
+    if (!via) { const src = formatSource(await sourceParts(r), '   📣', '      ▸ '); if (src) out.push(src) }
+    out.push('')
   }
-  out.push('', `🛠 ${SITE()}/admin#/payments`)
+  out.push(`🛠 ${SITE()}/admin#/payments`)
   return out.join('\n')
 }
 

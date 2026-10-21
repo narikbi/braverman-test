@@ -24,7 +24,8 @@ export async function tgCall(method: string, payload: object): Promise<Record<st
 export async function tgNotify(lines: (string | false | null | undefined)[]): Promise<void> {
   if (!tgConfigured()) return
   try {
-    await tgCall('sendMessage', { chat_id: process.env.TG_CHAT_ID, text: lines.filter(Boolean).join('\n'), parse_mode: 'HTML' })
+    // без превью ссылок: иначе Telegram подставляет карточку первой ссылки (сайта или ролика YouTube из источника)
+    await tgCall('sendMessage', { chat_id: process.env.TG_CHAT_ID, text: lines.filter(Boolean).join('\n'), parse_mode: 'HTML', link_preview_options: { is_disabled: true } })
   } catch (e) {
     console.error('tg_notify_failed', e)
   }
@@ -64,51 +65,64 @@ type SourceOf = { utm?: Record<string, string> | null; referrer?: string | null;
 /** Платная реклама (таргет): utm_medium = target / paid / cpc / ads … — показываем кампанию, группу, объявление. */
 export const isAdMedium = (m: string | undefined) => !!m && /^(target|таргет|paid|cpc|cpm|cpa|ads?|paid[_-]?social|ppc)/i.test(m)
 
-/**
- * Откуда пришёл клиент, одной строкой (уже экранировано для HTML):
- * «youtube / video · 4UpMCaYnnLw · «Название ролика» — Канал», «instagram / target · Кампания · Группа · Объявление».
- * Без UTM — сайт по рефереру; по ссылке тренера — '' (тренер и так в отдельной строке).
- */
 /** Старый адрес narikbi.github.io/braverman-test перенаправляет сюда и метит ссылки без меток utm_source=old_link. */
 export const OLD_SITE = 'narikbi.github.io'
-export const oldLinkLabel = (medium: string | undefined) =>
-  `старая ссылка (${OLD_SITE}) · ${!medium || medium === 'direct' ? 'открыли из мессенджера или закладки' : `нажали в ${medium}`}`
 
-export async function sourceLabel(a: SourceOf): Promise<string> {
+/** Источник для Telegram: заголовок и строки-подробности (всё уже экранировано для HTML). */
+export type SourceParts = { head: string; rows: string[] }
+
+/**
+ * Раскладываем UTM по строкам: у рекламы — кампания / группа / объявление / плейсмент,
+ * у подкаста — подкаст / выпуск, у канала — канал, у ролика YouTube — название ссылкой на видео.
+ * ytTitle — «Название» — Канал (если уже узнали), иначе показываем ID видео.
+ */
+export function utmParts(u: Record<string, string>, ytTitle: string | null = null): SourceParts {
+  const rows: string[] = []
+  const add = (k: string, v: string | undefined) => { if (v) rows.push(`${k}: ${tgEsc(v)}`) }
+  if (u.utm_source === 'old_link') {
+    const from = !u.utm_medium || u.utm_medium === 'direct' ? 'мессенджер или закладка' : u.utm_medium
+    return { head: tgEsc(`старая ссылка (${OLD_SITE})`), rows: [`откуда: ${tgEsc(from)}`] }
+  }
+  const head = tgEsc([u.utm_source, u.utm_medium].filter(Boolean).join(' / ') || '(без источника)')
+  if (isAdMedium(u.utm_medium)) {
+    add('кампания', u.utm_campaign); add('группа', u.utm_term); add('объявление', u.utm_content); add('плейсмент', u.utm_placement)
+    if (!rows.length) rows.push('<i>названий кампании и объявления в ссылке нет</i>')
+    return { head, rows }
+  }
+  const m = (u.utm_medium || '').toLowerCase()
+  const yt = youtubeIdOf(u)
+  if (u.utm_campaign !== yt) add(m === 'channel' ? 'канал' : m === 'podcast' ? 'подкаст' : 'кампания', u.utm_campaign)
+  add('группа', u.utm_term)
+  if (u.utm_content !== yt) add(m === 'podcast' ? 'выпуск' : 'контент', u.utm_content)
+  add('плейсмент', u.utm_placement)
+  if (yt) rows.push(`видео: <a href="https://youtu.be/${yt}">${tgEsc(ytTitle || yt)}</a>`) // yt проверен регуляркой YT_ID
+  return { head, rows }
+}
+
+/** Откуда пришёл клиент: UTM → сайт по рефереру → «прямой заход»; по ссылке тренера — null (тренер в отдельной строке). */
+export async function sourceParts(a: SourceOf): Promise<SourceParts | null> {
   const u = a.utm || {}
-  if (u.utm_source === 'old_link') return tgEsc(oldLinkLabel(u.utm_medium))
   if (u.utm_source || u.utm_medium || u.utm_campaign) {
-    const head = [u.utm_source, u.utm_medium].filter(Boolean).join(' / ')
-    const label = tgEsc([head, u.utm_campaign, u.utm_term, u.utm_content, u.utm_placement].filter(Boolean).join(' · '))
     const yt = youtubeIdOf(u)
-    const title = yt ? await youtubeTitle(yt) : null
-    return title ? `${label} · ${tgEsc(title)}` : label
+    return utmParts(u, yt ? await youtubeTitle(yt) : null)
   }
   if (a.referrer) {
     try {
       const host = new URL(a.referrer).host.replace(/^www\./, '')
-      if (host === OLD_SITE) return `старая ссылка (${OLD_SITE}) — где по ней нажали, не видно`
-      return tgEsc(`${host} · ссылка без метки — какое видео или пост, не видно`)
+      if (host === OLD_SITE) return { head: tgEsc(`старая ссылка (${OLD_SITE})`), rows: ['откуда: не видно'] }
+      return { head: tgEsc(host), rows: ['ссылка без метки — какое видео или пост, не видно'] }
     } catch { /* битый реферер */ }
   }
-  return a.trainer_code ? '' : 'прямой заход'
+  return a.trainer_code ? null : { head: 'прямой заход', rows: [] }
 }
 
-/**
- * Строка(и) источника для уведомлений. У рекламы — подробности отдельными строками
- * (в Ads Manager их подставляют {{campaign.name}}, {{adset.name}}, {{ad.name}}, {{placement}}).
- */
+/** Источник по строкам: «📣 заголовок», под ним «   ▸ подробность». */
+export const formatSource = (p: SourceParts | null, icon = '📣', indent = '   ▸ ') =>
+  p ? [`${icon} ${p.head}`, ...p.rows.map(r => indent + r)].join('\n') : ''
+
+/** Для уведомлений о счёте и оплате. */
 export async function sourceLine(a: SourceOf): Promise<string> {
-  const u = a.utm || {}
-  if (isAdMedium(u.utm_medium)) {
-    const rows = [
-      ['кампания', u.utm_campaign], ['группа', u.utm_term], ['объявление', u.utm_content], ['плейсмент', u.utm_placement]
-    ].filter(([, v]) => v).map(([k, v]) => `   ▸ ${k}: ${tgEsc(v!)}`)
-    const head = tgEsc([u.utm_source, u.utm_medium].filter(Boolean).join(' / '))
-    return [`📣 ${head}${rows.length ? '' : ' · <i>названий кампании и объявления в ссылке нет</i>'}`, ...rows].join('\n')
-  }
-  const s = await sourceLabel(a)
-  return s ? `📣 ${s}` : ''
+  return formatSource(await sourceParts(a))
 }
 
 export const adminAttemptLink = (id: number | null | undefined) => (id ? `🛠 ${SITE()}/admin#/attempts/${id}` : '')
