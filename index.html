@@ -9,7 +9,19 @@
   <meta http-equiv="refresh" content="0; url=https://braverman.kz/" />
   <script>
     // Сайт переехал: сохраняем ?t=<код тренера>, utm-метки и прочие параметры.
-    location.replace('https://braverman.kz/' + location.search + location.hash)
+    // Ссылка без меток — помечаем как старую и передаём, откуда по ней нажали (иначе на новом сайте
+    // виден только narikbi.github.io): utm_source=old_link, utm_medium=<сайт-источник> или direct.
+    (function () {
+      var q = new URLSearchParams(location.search)
+      if (!q.has('utm_source') && !q.has('t')) {
+        var ref = ''
+        try { if (document.referrer) ref = new URL(document.referrer).hostname.replace(/^www\./, '') } catch (e) {}
+        q.set('utm_source', 'old_link')
+        q.set('utm_medium', ref || 'direct')
+      }
+      var qs = q.toString()
+      location.replace('https://braverman.kz/' + (qs ? '?' + qs : '') + location.hash)
+    })()
   </script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; background: #f6f7fb; color: #1f2430; }
