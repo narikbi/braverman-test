@@ -69,8 +69,14 @@ export const isAdMedium = (m: string | undefined) => !!m && /^(target|тарге
  * «youtube / video · 4UpMCaYnnLw · «Название ролика» — Канал», «instagram / target · Кампания · Группа · Объявление».
  * Без UTM — сайт по рефереру; по ссылке тренера — '' (тренер и так в отдельной строке).
  */
+/** Старый адрес narikbi.github.io/braverman-test перенаправляет сюда и метит ссылки без меток utm_source=old_link. */
+export const OLD_SITE = 'narikbi.github.io'
+export const oldLinkLabel = (medium: string | undefined) =>
+  `старая ссылка (${OLD_SITE}) · ${!medium || medium === 'direct' ? 'открыли из мессенджера или закладки' : `нажали в ${medium}`}`
+
 export async function sourceLabel(a: SourceOf): Promise<string> {
   const u = a.utm || {}
+  if (u.utm_source === 'old_link') return tgEsc(oldLinkLabel(u.utm_medium))
   if (u.utm_source || u.utm_medium || u.utm_campaign) {
     const head = [u.utm_source, u.utm_medium].filter(Boolean).join(' / ')
     const label = tgEsc([head, u.utm_campaign, u.utm_term, u.utm_content, u.utm_placement].filter(Boolean).join(' · '))
@@ -79,7 +85,11 @@ export async function sourceLabel(a: SourceOf): Promise<string> {
     return title ? `${label} · ${tgEsc(title)}` : label
   }
   if (a.referrer) {
-    try { return tgEsc(`${new URL(a.referrer).host.replace(/^www\./, '')} · ссылка без метки — какое видео или пост, не видно`) } catch { /* битый реферер */ }
+    try {
+      const host = new URL(a.referrer).host.replace(/^www\./, '')
+      if (host === OLD_SITE) return `старая ссылка (${OLD_SITE}) — где по ней нажали, не видно`
+      return tgEsc(`${host} · ссылка без метки — какое видео или пост, не видно`)
+    } catch { /* битый реферер */ }
   }
   return a.trainer_code ? '' : 'прямой заход'
 }

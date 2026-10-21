@@ -2,7 +2,7 @@
 // Цифры — те же, что в админке (api/_stats.ts). Бот отвечает только в чате TG_CHAT_ID.
 // Подключение: админка → Система → «Подключить команды бота» (setWebhook + setMyCommands).
 import crypto from 'node:crypto'
-import { tgCall, SITE, sourceLabel, youtubeIdOf, youtubeTitle, isAdMedium } from './_lib.js'
+import { tgCall, SITE, sourceLabel, youtubeIdOf, youtubeTitle, isAdMedium, oldLinkLabel } from './_lib.js'
 import { rangeFor, kpi, funnelCounts, sourcesStats, trainersStats, recentPaid, ALL, FUNNEL_TYPES, FUNNEL_LABELS, type Kpi } from './_stats.js'
 
 // ── вебхук ──
@@ -136,7 +136,8 @@ export async function periodReport(p: Preset): Promise<string> {
     const yt = youtubeIdOf({ utm_source: s.source, utm_campaign: s.campaign, utm_content: s.content })
     // у рекламы объявлений много — каждое отдельной строкой (utm_content), у остального content сворачиваем
     const ad = isAdMedium(s.medium) && s.content ? ` · ${s.content}` : ''
-    const key = [s.source, s.medium].filter(Boolean).join(' / ') + (s.campaign ? ` · ${s.campaign}` : '') + ad + (yt && yt !== s.campaign && !ad ? ` · ${yt}` : '')
+    const key = s.source === 'old_link' ? oldLinkLabel(s.medium)
+      : [s.source, s.medium].filter(Boolean).join(' / ') + (s.campaign ? ` · ${s.campaign}` : '') + ad + (yt && yt !== s.campaign && !ad ? ` · ${yt}` : '')
     const a = agg.get(key) ?? { views: 0, paid: 0, revenue: 0, yt }
     a.views += s.views; a.paid += s.paid; a.revenue += s.revenue
     agg.set(key, a)
