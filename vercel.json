@@ -15,6 +15,11 @@
       "permanent": false
     },
     {
+      "source": "/tg/:name",
+      "destination": "/?utm_source=telegram&utm_medium=channel&utm_campaign=:name",
+      "permanent": false
+    },
+    {
       "source": "/ig",
       "destination": "/?utm_source=instagram&utm_medium=bio",
       "permanent": false
