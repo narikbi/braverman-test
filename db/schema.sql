@@ -111,3 +111,20 @@ CREATE INDEX IF NOT EXISTS attempts_self_trainer_idx ON attempts (self_trainer_i
 
 -- Номер телефона тренера уникален (вход по номеру): сравниваем последние 10 цифр, пустой номер не считается.
 CREATE UNIQUE INDEX IF NOT EXISTS trainers_phone_uniq ON trainers (right(regexp_replace(phone, '\D', '', 'g'), 10)) WHERE phone <> '';
+
+-- Промокоды на бесплатный тест (код на странице оплаты или ссылка /promo/<код>).
+-- Погашенная попытка: status = 'paid', paid_by = 'promo', promo_code; строки в payments и события 'paid' нет —
+-- в выручку и «Оплатили» не входит. Таблицу и колонку на проде создаёт и само приложение (api/_promo.ts, ensurePromoSchema).
+CREATE TABLE IF NOT EXISTS promo_codes (
+  id           bigserial PRIMARY KEY,
+  code         text NOT NULL UNIQUE,                  -- верхний регистр: BRV-7K3Q9 или свой
+  note         text NOT NULL DEFAULT '',              -- кому / зачем
+  max_uses     int  NOT NULL DEFAULT 1 CHECK (max_uses >= 1),
+  used         int  NOT NULL DEFAULT 0,
+  active       boolean NOT NULL DEFAULT true,
+  created_by   text NOT NULL DEFAULT 'admin',         -- admin | bot
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  last_used_at timestamptz
+);
+ALTER TABLE attempts ADD COLUMN IF NOT EXISTS promo_code text;
+CREATE INDEX IF NOT EXISTS attempts_promo_idx ON attempts (promo_code) WHERE promo_code IS NOT NULL;

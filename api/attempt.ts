@@ -3,7 +3,8 @@
 // Без DATABASE_URL тест работает, но ничего не сохраняется (id=0).
 import { dbConfigured, createAttempt, finishAttempt, logEvent, ipHash, cleanAttribution, getAttempt, retakeInfo, grantRetake, type AttemptMeta } from './_db.js'
 import { makeAttemptToken, verifyAttemptToken, verifyResultToken, makeResultToken, verifyPrepaidToken } from './_access.js'
-import { fulfillRetake, fulfillPrepaid, fulfillTrainerSelf } from './_fulfill.js'
+import { fulfillRetake, fulfillPrepaid, fulfillTrainerSelf, fulfillPromo } from './_fulfill.js'
+import { normCode, checkPromo, redeemPromo } from './_promo.js'
 import { bodyOf } from './_lib.js'
 import { scoreAttempt, isValidAnswers, blockedPairs, MAX_FREE_RETAKES } from '../shared/scoring.js'
 
@@ -40,6 +41,14 @@ export default async function handler(req: Req, res: Res) {
       await logEvent({ type: 'prepaid_open', attemptId: a.id, ...common, trainerCode: a.self_trainer_id ? null : a.trainer_code })
       const aid = Number(a.id) // bigint из Neon приходит строкой
       return res.status(200).json({ ok: true, id: aid, token: makeAttemptToken(aid), name: a.name, lang: a.lang })
+    }
+
+    // Ссылка /promo/<код>: можно ли ещё погасить код (пометка «тест в подарок» на главной)
+    if (action === 'promo-check') {
+      const code = normCode(b.code)
+      if (!code) return res.status(200).json({ ok: true, valid: false, reason: 'not_found' })
+      const c = await checkPromo(code)
+      return res.status(200).json({ ok: true, valid: c.valid, reason: c.valid ? null : c.reason, code })
     }
 
     if (action === 'start') {
@@ -81,6 +90,18 @@ export default async function handler(req: Req, res: Res) {
       if (done.status === 'paid' && done.paid_by === 'prepaid') {
         await fulfillPrepaid({ ...done, id })
         return res.status(200).json({ ok: true, id, token: makeAttemptToken(id), teaser, r: makeResultToken(id) })
+      }
+
+      // Промокод из ссылки /promo/<код>: гасим при завершении, не вышло — обычная оплата с пояснением
+      const promo = normCode(b.promo)
+      if (promo && done.status !== 'paid') {
+        const red = await redeemPromo(id, promo, null)
+        if (red.ok) {
+          await fulfillPromo(red.attempt, red.promo, 'link')
+          return res.status(200).json({ ok: true, id, token: makeAttemptToken(id), teaser, r: makeResultToken(id) })
+        }
+        await logEvent({ type: 'promo_failed', attemptId: id, ...common, props: { code: promo, reason: red.reason, via: 'link' } })
+        return res.status(200).json({ ok: true, id, token: makeAttemptToken(id), teaser, promoError: red.reason })
       }
 
       // Бесплатная пересдача: клиент пришёл по кнопке из заблокированного результата (b.retake = его токен результата)

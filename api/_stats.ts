@@ -72,10 +72,11 @@ export async function kpi(from: Date, to: Date, s: Scope) {
       SELECT COALESCE(sum(p.amount), 0) AS revenue, count(*) AS paid FROM payments p
       LEFT JOIN attempts a ON a.id = p.attempt_id
       WHERE p.status = 'paid' AND p.paid_at >= $1 AND p.paid_at < $2 AND ($3::text IS NULL OR a.trainer_code = $3)`, [from, to, s.trainerCode]),
-    q<{ started: string; finished: string; awaiting: string }>('kpi_attempts', `
+    q<{ started: string; finished: string; awaiting: string; promo: string }>('kpi_attempts', `
       SELECT count(*) FILTER (WHERE created_at >= $1 AND created_at < $2) AS started,
              count(*) FILTER (WHERE finished_at >= $1 AND finished_at < $2) AS finished,
-             count(*) FILTER (WHERE finished_at >= $1 AND finished_at < $2 AND status <> 'paid') AS awaiting
+             count(*) FILTER (WHERE finished_at >= $1 AND finished_at < $2 AND status <> 'paid') AS awaiting,
+             count(*) FILTER (WHERE paid_by = 'promo' AND paid_at >= $1 AND paid_at < $2) AS promo
       FROM attempts WHERE ($3::text IS NULL OR trainer_code = $3)`, [from, to, s.trainerCode])
   ])
   const paid = Number(rev[0]?.paid ?? 0)
@@ -85,6 +86,7 @@ export async function kpi(from: Date, to: Date, s: Scope) {
     visits: f.page_view, started, finished, checkouts: f.checkout_view, invoices: f.invoice_created,
     paid, revenue: Number(rev[0]?.revenue ?? 0), results: f.result_view,
     awaiting: Number(att[0]?.awaiting ?? 0), // прошли тест, но ещё не оплатили — тренер может напомнить
+    promo: Number(att[0]?.promo ?? 0), // прошли бесплатно по промокоду — в оплаты и выручку не входят
     convVisitPaid: f.page_view ? +((paid / f.page_view) * 100).toFixed(2) : 0,
     convFinishPaid: finished ? +((paid / finished) * 100).toFixed(1) : 0,
     convStartFinish: started ? +((finished / started) * 100).toFixed(1) : 0
@@ -120,7 +122,7 @@ export async function trainersStats(from: Date, to: Date): Promise<{ rows: Train
       (SELECT count(DISTINCT e.sid) FROM events e WHERE e.trainer_code = t.code AND e.type = 'page_view' AND e.ts >= $1 AND e.ts < $2) AS visits,
       count(a.id) FILTER (WHERE a.created_at >= $1 AND a.created_at < $2)   AS started,
       count(a.id) FILTER (WHERE a.finished_at >= $1 AND a.finished_at < $2) AS finished,
-      count(a.id) FILTER (WHERE a.paid_at >= $1 AND a.paid_at < $2 AND a.paid_by IS DISTINCT FROM 'retake') AS paid, -- бесплатные пересдачи не считаем
+      count(a.id) FILTER (WHERE a.paid_at >= $1 AND a.paid_at < $2 AND COALESCE(a.paid_by, '') NOT IN ('retake', 'promo')) AS paid, -- бесплатные пересдачи и промокоды не считаем
       COALESCE((SELECT sum(p.amount) FROM payments p JOIN attempts a2 ON a2.id = p.attempt_id
                 WHERE a2.trainer_code = t.code AND p.status = 'paid' AND p.paid_at >= $1 AND p.paid_at < $2), 0) AS revenue
     FROM trainers t LEFT JOIN attempts a ON a.trainer_code = t.code

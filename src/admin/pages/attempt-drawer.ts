@@ -13,7 +13,7 @@ import { NEURO_ORDER, neuroAt, questionIndexAt, QUESTIONS_PER_BLOCK } from '../.
 type Attempt = {
   id: number; name: string; phone: string | null; lang: Lang; status: string; answered: number; notes?: string
   answers: number[] | null; dopamine: number | null; acetylcholine: number | null; gaba: number | null; serotonin: number | null
-  dominant: string | null; lowest: string | null; combo: string | null; paid_by: string | null
+  dominant: string | null; lowest: string | null; combo: string | null; paid_by: string | null; promo_code?: string | null
   utm: Record<string, string>; referrer: string | null; landing: string | null; trainer_code: string | null
   created_at: string; finished_at: string | null; checkout_at: string | null; paid_at: string | null
   invoice_id: string | null; invoice_error?: string | null; test_amount: number | null; retake_of?: number | null
@@ -45,7 +45,7 @@ export async function openAttemptDrawer(id: number, onClose: () => void) {
   body.innerHTML = `
     <div>
       <div style="font-size:20px;font-weight:800">${esc(a.name || L('Без имени', 'Аты жазылмаған'))}</div>
-      <div class="row-actions" style="margin-top:6px">${badge(a.status)}${a.status === 'started' ? `<span class="chip">${a.answered}/200</span>` : ''}${a.test_amount ? '<span class="chip">тестовый счёт</span>' : ''}${a.paid_by === 'admin' ? '<span class="chip">выдано вручную</span>' : ''}${a.paid_by === 'prepaid' ? '<span class="chip">оплата вне сайта</span>' : ''}${a.paid_by === 'retake' ? `<span class="chip">${L('пересдача', 'қайта өтті')}</span>` : ''}${a.paid_by === 'trainer' ? '<span class="chip">свой тест тренера</span>' : ''}
+      <div class="row-actions" style="margin-top:6px">${badge(a.status)}${a.status === 'started' ? `<span class="chip">${a.answered}/200</span>` : ''}${a.test_amount ? '<span class="chip">тестовый счёт</span>' : ''}${a.paid_by === 'admin' ? '<span class="chip">выдано вручную</span>' : ''}${a.paid_by === 'prepaid' ? '<span class="chip">оплата вне сайта</span>' : ''}${a.paid_by === 'retake' ? `<span class="chip">${L('пересдача', 'қайта өтті')}</span>` : ''}${a.paid_by === 'trainer' ? '<span class="chip">свой тест тренера</span>' : ''}${a.paid_by === 'promo' ? `<span class="chip">🎁 по промокоду ${esc(a.promo_code || '')}</span>` : ''}
         ${digits && !a.phone!.includes('•') ? `<a class="btn btn-sm" href="https://wa.me/${digits}" target="_blank" rel="noopener">WhatsApp</a><a class="btn btn-sm" href="tel:+${digits}">${L('Позвонить', 'Қоңырау шалу')}</a>` : ''}</div>
     </div>
     <div class="kv">

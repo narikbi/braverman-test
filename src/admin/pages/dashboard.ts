@@ -7,7 +7,7 @@ import { timelineChart, sourcesChart, type Point } from '../components/charts'
 import { dbMissing } from './shared'
 import { L, funnelLabel } from '../i18n'
 
-export type Kpi = { visits: number; started: number; finished: number; checkouts: number; invoices: number; paid: number; revenue: number; results: number; convVisitPaid: number; convFinishPaid: number; convStartFinish: number; awaiting?: number }
+export type Kpi = { visits: number; started: number; finished: number; checkouts: number; invoices: number; paid: number; revenue: number; results: number; convVisitPaid: number; convFinishPaid: number; convStartFinish: number; awaiting?: number; promo?: number }
 type Overview = { kpi: Kpi; prev: Kpi; range: { bucket: 'hour' | 'day' } }
 type Funnel = { stages: { key: string; label: string; count: number }[] }
 type Timeline = { bucket: 'hour' | 'day'; points: Point[] }
@@ -17,7 +17,7 @@ type TrainersStats = { rows: { id: number; code: string; name: string; active: b
 export function kpiCards(k: Kpi, p: Kpi): string {
   return [
     kpiCard(L('Выручка', 'Түсім'), fmtMoney(k.revenue), k.revenue, p.revenue, L(`${k.paid} оплат`, `${k.paid} адам төледі`)),
-    kpiCard(L('Оплаты', 'Төлегендер'), fmtNum(k.paid), k.paid, p.paid, L(`${fmtPct(k.convFinishPaid)} из закончивших`, `тестті аяқтағандардың ${fmtPct(k.convFinishPaid)}-ы төледі`)),
+    kpiCard(L('Оплаты', 'Төлегендер'), fmtNum(k.paid), k.paid, p.paid, L(`${fmtPct(k.convFinishPaid)} из закончивших`, `тестті аяқтағандардың ${fmtPct(k.convFinishPaid)}-ы төледі`) + (k.promo ? ` · 🎁 ${fmtNum(k.promo)} по промокоду` : '')),
     kpiCard(L('Закончили тест', 'Тестті аяқтады'), fmtNum(k.finished), k.finished, p.finished, L(`${fmtPct(k.convStartFinish)} из начавших`, `бастағандардың ${fmtPct(k.convStartFinish)}-ы аяқтады`)),
     kpiCard(L('Начали тест', 'Тестті бастады'), fmtNum(k.started), k.started, p.started, L(`${k.invoices} счетов выставлено`, `${k.invoices} шот жіберілді`)),
     kpiCard(L('Открыли сайт', 'Сайтты ашты'), fmtNum(k.visits), k.visits, p.visits, L(`${k.results} открыли результат`, `${k.results} адам нәтижесін ашты`)),

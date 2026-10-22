@@ -3,7 +3,7 @@
 import crypto from 'node:crypto'
 import { tgCall, tgConfigured, bodyOf } from './_lib.js'
 import { dbConfigured } from './_db.js'
-import { tgWebhookSecret, summaryReport, periodReport, paymentsReport, trainersReport, HELP_TEXT, KEYBOARD } from './_tgbot.js'
+import { tgWebhookSecret, summaryReport, periodReport, paymentsReport, trainersReport, promoCommand, HELP_TEXT, KEYBOARD } from './_tgbot.js'
 
 type Req = { method?: string; headers: Record<string, string | string[] | undefined>; body?: unknown }
 type Res = { status: (code: number) => { json: (o: object) => void }; setHeader: (k: string, v: string) => void }
@@ -18,7 +18,8 @@ const safeEqual = (a: string, b: string) => {
   return x.length === y.length && x.length > 0 && crypto.timingSafeEqual(x, y)
 }
 
-const COMMANDS: Record<string, () => Promise<string>> = {
+// args — текст после команды («/promo 5 Тренинг» → «5 Тренинг»); отчётам он не нужен
+const COMMANDS: Record<string, (args: string) => Promise<string>> = {
   report: summaryReport,
   start: summaryReport,
   today: () => periodReport('today'),
@@ -28,6 +29,7 @@ const COMMANDS: Record<string, () => Promise<string>> = {
   all: () => periodReport('all'),
   payments: () => paymentsReport(10),
   trainers: trainersReport,
+  promo: promoCommand,
   help: async () => HELP_TEXT
 }
 const BUTTONS: Record<string, () => Promise<string>> = {
@@ -60,8 +62,9 @@ export default async function handler(req: Req, res: Res) {
       if (make && allowed(cq.message?.chat.id) && dbConfigured()) await reply(cq.message!.chat.id, await make())
     } else if (u.message?.text?.startsWith('/') && allowed(u.message.chat.id)) {
       const cmd = u.message.text.slice(1).split(/[\s@]/)[0].toLowerCase()
+      const args = u.message.text.replace(/^\/\S+\s*/, '')
       const make = COMMANDS[cmd]
-      if (make) await reply(u.message.chat.id, dbConfigured() ? await make() : 'База данных не подключена.')
+      if (make) await reply(u.message.chat.id, dbConfigured() ? await make(args) : 'База данных не подключена.')
     }
   } catch (e) {
     console.error('tg_update_failed', e)

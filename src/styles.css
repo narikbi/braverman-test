@@ -502,4 +502,12 @@ a.btn-block { display: block; }
 .retake-note { margin-top: 10px; font-size: 13px; color: var(--muted); text-align: center; }
 
 /* оплата вне сайта: пометка на главной */
+.promo-bad { margin-top: 14px; padding: 10px 14px; border-radius: var(--radius-sm); background: #FFF7ED; border: 1px solid #FED7AA; color: #9A3412; font-size: 13.5px; }
+.promo-toggle { display: block; margin: 12px auto 0; background: none; border: 0; padding: 4px; font: inherit; font-size: 13.5px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.promo-toggle:hover { color: var(--accent); }
+.promo-box { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.promo-box input { width: 100%; padding: 14px 16px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font: inherit; font-size: 16px; text-transform: uppercase; letter-spacing: .04em; background: var(--surface); color: var(--text); }
+.promo-box input:focus { outline: none; border-color: var(--accent); }
+.promo-box .hint { margin-top: 0; }
+.promo-toggle[hidden], .promo-box[hidden], .promo-bad[hidden] { display: none; }
 .prepaid-note { margin-top: 14px; padding: 10px 14px; border-radius: var(--radius-sm); background: #EEFBF5; border: 1px solid #BFEBD7; color: #1F7A57; font-size: 14px; font-weight: 600; }

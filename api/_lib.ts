@@ -31,7 +31,7 @@ export async function tgNotify(lines: (string | false | null | undefined)[]): Pr
   }
 }
 
-const tgEsc = (s: string) => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]!))
+export const tgEsc = (s: string) => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]!))
 
 export const YT_ID = /^[A-Za-z0-9_-]{11}$/
 const ytCache = new Map<string, string>()

@@ -17,6 +17,9 @@ export type UiText = {
   disclaimer: string
   privacyLink: string
   prepaidNote: string
+  /** ссылка /promo/<код>: код действует / не действует */
+  promoNote: string
+  promoBad: string
   retake: {
     title: string
     text: (pairs: string) => string
@@ -54,6 +57,8 @@ export type UiText = {
     title: string; lead: string; teaserLabel: string; benefits: string[]
     phoneLabel: string; phonePlaceholder: string; phoneError: string; noKaspi: string
     payBtn: (price: string) => string; sending: string; priceNote: string; error: string
+    promoToggle: string; promoPlaceholder: string; promoApply: string; promoHint: string; promoEmpty: string
+    promoNotFound: string; promoUsed: string; promoTooMany: string; promoLinkUsed: string
   }
   waiting: {
     title: string; lead: string; steps: string[]; waiting: string; note: string; changePhone: string

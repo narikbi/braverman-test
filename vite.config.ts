@@ -16,6 +16,13 @@ function apiDevPlugin(): Plugin {
         } else if (req.url && /^\/privacy\/?(\?|$)/.test(req.url)) {
           req.url = req.url.replace(/^\/privacy\/?/, '/privacy.html')
         } else if (req.url) {
+          const promo = /^\/promo\/([A-Za-z0-9-]{3,32})\/?$/.exec(req.url)
+          if (promo) {
+            res.statusCode = 302
+            res.setHeader('Location', `/?promo=${promo[1]}`)
+            res.end()
+            return
+          }
           const m = /^\/t\/([A-Za-z0-9_-]{2,32})\/?(\?.*)?$/.exec(req.url)
           if (m) {
             res.statusCode = 302

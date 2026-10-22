@@ -18,9 +18,11 @@ export type State = {
   retakeOf: string
   /** тест оплачен вне сайта (ссылка /?p=…) — после теста сразу результат */
   prepaid: boolean
+  /** промокод из ссылки /promo/<код> — гасится при завершении теста, результат сразу */
+  promo: string
 }
 
-const empty = (): State => ({ name: '', answers: [], index: 0, attemptId: 0, attemptToken: '', teaser: null, phone: '', invoiceId: '', resultToken: '', retakeOf: '', prepaid: false })
+const empty = (): State => ({ name: '', answers: [], index: 0, attemptId: 0, attemptToken: '', teaser: null, phone: '', invoiceId: '', resultToken: '', retakeOf: '', prepaid: false, promo: '' })
 
 function load(): State {
   try {

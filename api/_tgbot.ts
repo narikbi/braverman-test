@@ -3,6 +3,8 @@
 // Подключение: админка → Система → «Подключить команды бота» (setWebhook + setMyCommands).
 import crypto from 'node:crypto'
 import { tgCall, SITE, sourceParts, formatSource, utmParts, youtubeIdOf, youtubeTitle, isAdMedium } from './_lib.js'
+import { createPromo, promoLink, timesRu } from './_promo.js'
+import { logEvent } from './_db.js'
 import { rangeFor, kpi, funnelCounts, sourcesStats, trainersStats, recentPaid, ALL, FUNNEL_TYPES, FUNNEL_LABELS, type Kpi } from './_stats.js'
 
 // ── вебхук ──
@@ -22,7 +24,8 @@ export const BOT_COMMANDS = [
   { command: 'month', description: 'Отчёт за 30 дней' },
   { command: 'all', description: 'Отчёт за всё время' },
   { command: 'payments', description: 'Последние оплаты' },
-  { command: 'trainers', description: 'Тренеры за 30 дней' }
+  { command: 'trainers', description: 'Тренеры за 30 дней' },
+  { command: 'promo', description: 'Промокод на бесплатный тест: /promo [сколько раз] [кому]' }
 ]
 
 type TgResult<T> = { ok: boolean; result?: T; description?: string }
@@ -93,6 +96,7 @@ export async function summaryReport(): Promise<string> {
   return [
     '📊 <b>Финансы · braverman.kz</b>',
     `<pre>${esc(`${pad('Период', 10)}${pad('Оплат', 6, true)}${pad('Выручка', 13, true)}\n${lines.join('\n')}`)}</pre>`,
+    ...(rows.some(x => x.k.promo) ? [`🎁 По промокоду: ${rows.filter(x => x.k.promo).map(x => `${PERIOD_NAME[x.p]} ${num(x.k.promo)}`).join(' · ')}`] : []),
     'Подробный отчёт — кнопками ниже.'
   ].join('\n')
 }
@@ -113,6 +117,7 @@ export async function periodReport(p: Preset): Promise<string> {
     '',
     `💰 Выручка: <b>${money(k.revenue)}</b>${prev ? delta(k.revenue, prev.revenue) : ''}`,
     `🧾 Оплат: <b>${num(k.paid)}</b>${prev ? delta(k.paid, prev.paid) : ''}${k.paid ? ` · средний чек ${money(avg)}` : ''}`,
+    ...(k.promo ? [`🎁 По промокоду (бесплатно): ${num(k.promo)}`] : []),
     `👀 Открыли сайт: ${num(k.visits)}${prev ? delta(k.visits, prev.visits) : ''}`,
     `✅ Прошли тест: ${num(k.finished)} из ${num(k.started)} начавших`,
     '',
@@ -204,3 +209,27 @@ export const HELP_TEXT = [
   '🤖 <b>Команды</b>',
   ...BOT_COMMANDS.map(c => `/${c.command} — ${c.description}`)
 ].join('\n')
+
+/**
+ * /promo [сколько раз] [кому] — промокод на бесплатный тест: «/promo», «/promo 5», «/promo Айгерім», «/promo 3 Тренинг 21 окт».
+ * Ответ — код и ссылка в <code> (в Telegram нажатие копирует).
+ */
+export async function promoCommand(args = ''): Promise<string> {
+  const m = args.trim().match(/^(\d{1,4})?\s*([\s\S]*)$/)
+  const uses = m?.[1] ? Number(m[1]) : 1
+  const note = (m?.[2] || '').trim().slice(0, 200)
+  if (uses < 1 || uses > 1000) return 'Сколько раз можно использовать код — от 1 до 1000. Пример: <code>/promo 5 Тренинг</code>'
+  const p = await createPromo({ note, uses, by: 'bot' })
+  if (p === 'code_taken') return 'Не получилось создать код — попробуйте ещё раз.'
+  await logEvent({ type: 'promo_created', props: { code: p.code, uses: p.max_uses, by: 'bot' } })
+  return [
+    '🎁 <b>Промокод на бесплатный тест</b>',
+    '',
+    `Код: <code>${esc(p.code)}</code>`,
+    `Ссылка: <code>${esc(promoLink(p.code))}</code>`,
+    `Можно использовать: ${timesRu(p.max_uses)}${note ? ` · кому: ${esc(note)}` : ''}`,
+    '',
+    '<i>Код вводят на странице оплаты. По ссылке тест проходят без оплаты — результат откроется сразу.</i>',
+    `🛠 ${SITE()}/admin#/promos`
+  ].join('\n')
+}

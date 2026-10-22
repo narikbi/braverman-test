@@ -4,7 +4,8 @@
 import { markPaid, logEvent, setPaymentLinkSent, getAttempt, q } from './_db.js'
 import { makeResultToken } from './_access.js'
 import { sendLinkTemplate, whatsappConfigured, fmtWaNumber } from './_whatsapp.js'
-import { tgNotify, adminAttemptLink, SITE, sheetMirror, sourceLine } from './_lib.js'
+import { tgNotify, adminAttemptLink, SITE, sheetMirror, sourceLine, tgEsc } from './_lib.js'
+import type { PromoRow } from './_promo.js'
 import { blockedPairs } from '../shared/scoring.js'
 import type { AttemptRow } from './_db.js'
 
@@ -166,5 +167,37 @@ export async function fulfillTrainerSelf(a: AttemptRow): Promise<void> {
     a.dominant ? `🧠 ${comboLabel(a.dominant, a.combo)}` : '',
     blocked ? `⚠️ Заблокированность отделов: ${blocked}` : '',
     adminAttemptLink(a.id)
+  ])
+}
+
+/**
+ * Тест по промокоду (бесплатно): via='checkout' — код ввели на экране оплаты (есть номер),
+ * via='link' — открыли ссылку /promo/<код> (номера нет). Ссылка на результат — в WhatsApp, уведомление — в Telegram.
+ */
+export async function fulfillPromo(a: AttemptRow, p: PromoRow, via: 'checkout' | 'link'): Promise<void> {
+  await logEvent({ type: 'promo_redeemed', attemptId: a.id, sid: a.sid, utm: a.utm, trainerCode: a.trainer_code, props: { code: p.code, via } })
+  const link = resultLink(a.id)
+  let waSent = false
+  let waFrom = ''
+  if (a.phone) {
+    const w = await sendLinkTemplate(a.phone, a.name, link, a.lang)
+    waSent = w.sent
+    waFrom = w.from || ''
+  }
+  const blocked = blockedLabel(a)
+  await tgNotify([
+    '🎁 <b>ПРОМОКОД — тест Бравермана</b> (бесплатно)',
+    `👤 ${tgEsc(a.name || '—')}`,
+    `📱 <code>${a.phone || '—'}</code>`,
+    a.dominant ? `🧠 ${comboLabel(a.dominant, a.combo)}` : '',
+    blocked ? `⚠️ Заблокированность отделов: ${blocked} — клиенту предложена бесплатная пересдача` : '',
+    `🏷 <code>${tgEsc(p.code)}</code> · использовано ${p.used} из ${p.max_uses}${p.note ? ` · кому: ${tgEsc(p.note)}` : ''}`,
+    via === 'link' ? '   по ссылке с промокодом' : '   ввели на странице оплаты',
+    await sourceLine(a),
+    `🔗 ${link}`,
+    adminAttemptLink(a.id),
+    whatsappConfigured() && a.phone
+      ? (waSent ? `📲 Ссылка на результат отправлена клиенту в WhatsApp ✅${waFrom ? `\n📤 С номера: <code>${fmtWaNumber(waFrom)}</code>` : ''}` : '📲 ❗️WhatsApp не доставлен — перешли ссылку клиенту')
+      : ''
   ])
 }

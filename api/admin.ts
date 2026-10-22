@@ -1,7 +1,8 @@
 // /api/admin?action=<...> — единый роутер админки и кабинета тренера (лимит функций Vercel).
 // GET: me, health, overview, funnel, timeline, sources, trainers-stats, attempts, attempt, payments, export, trainers, trainer
 // POST (JSON, заголовок X-Requested-With: admin): login, logout, attempt-update, attempt-grant, attempt-resend,
-//       trainer-create, trainer-update, trainer-password, tg-setup, prepaid-create, prepaid-grant, prepaid-send
+//       trainer-create, trainer-update, trainer-password, tg-setup, prepaid-create, prepaid-grant, prepaid-send,
+//       promo-create, promo-toggle (GET promos — список промокодов)
 // Тренер: GET me-profile; единственный разрешённый ему POST — self-test (свой бесплатный тест).
 // Роль trainer видит только свои попытки (scope по trainer_id / trainer_code); POST-действия ей запрещены.
 import { adminConfigured, checkCredentials, checkAdminPhone, makeSession, sessionFromReq, sessionCookie, clearCookie, hashPassword, verifyPassword, type Session } from './_admin-auth.js'
@@ -17,6 +18,7 @@ import { tgConfigured, tgNotify, SITE, PRICE, bodyOf, queryOf, normalizePhone, a
 import { makePrepaidToken, makeResultToken } from './_access.js'
 import { blockedPairs } from '../shared/scoring.js'
 import { tgSetup, tgStatus } from './_tgbot.js'
+import { ensurePromoSchema, createPromo, listPromos, togglePromo, normCode, promoStatus, promoLink } from './_promo.js'
 import { almatyDate, parseRange, funnelCounts, kpi, sourcesStats, trainersStats, FUNNEL_TYPES, FUNNEL_LABELS, type Scope } from './_stats.js'
 
 type Req = { method?: string; url?: string; headers: Record<string, string | string[] | undefined>; query?: Record<string, string | string[] | undefined>; body?: unknown }
@@ -185,6 +187,8 @@ export default async function handler(req: Req, res: Res) {
   }
 
   if (!dbConfigured()) return res.status(503).json({ ok: false, error: 'db_not_configured' })
+  // колонка attempts.promo_code и таблица promo_codes — создаются при первом обращении
+  const promoReady = await ensurePromoSchema().then(() => true, e => { console.error('promo_schema_failed', e); return false })
   const r = parseRange(p)
 
   if (action === 'overview') {
@@ -238,7 +242,7 @@ export default async function handler(req: Req, res: Res) {
     const rows = await q<Record<string, unknown> & { total: string; phone: string | null }>('attempts', `
       SELECT a.id, a.created_at, a.name, a.phone, a.lang, a.status, a.answered, a.dominant, a.combo, a.paid_by,
              a.dopamine, a.acetylcholine, a.gaba, a.serotonin, a.finished_at, a.paid_at, a.test_amount, a.invoice_id, a.trainer_code,
-             a.utm->>'utm_source' AS source, a.utm->>'utm_campaign' AS campaign, t.name AS trainer_name, t.id AS trainer_id,
+             ${promoReady ? 'a.promo_code' : 'NULL AS promo_code'}, a.utm->>'utm_source' AS source, a.utm->>'utm_campaign' AS campaign, t.name AS trainer_name, t.id AS trainer_id,
              count(*) OVER () AS total
       FROM attempts a LEFT JOIN trainers t ON t.id = a.trainer_id
       WHERE a.created_at >= $1 AND a.created_at < $2
@@ -286,12 +290,19 @@ export default async function handler(req: Req, res: Res) {
     const status = p.get('status') || null
     const limit = Math.min(100, Math.max(1, Number(p.get('limit') || 25)))
     const page = Math.max(1, Number(p.get('page') || 1))
+    // тесты по промокоду — тоже здесь, с пометкой (provider 'promo', 0 ₸); в выручку не входят (kpi считает по payments)
+    const promoRows = promoReady ? `
+        UNION ALL
+        SELECT NULL, 'promo-' || a.id, 'promo', a.promo_code, COALESCE(a.phone, ''), 0, 'paid', 'promo', NULL, a.paid_at, a.paid_at, a.id, a.name
+        FROM attempts a WHERE a.paid_by = 'promo' AND a.paid_at >= $1 AND a.paid_at < $2 AND ($3::text IS NULL OR $3 = 'paid')` : ''
     const rows = await q<Record<string, unknown> & { total: string }>('payments', `
-      SELECT p.id, p.invoice_id, p.provider, p.method, p.phone, p.amount, p.status, p.source, p.link_sent, p.created_at, p.paid_at, p.attempt_id,
-             a.name AS attempt_name, count(*) OVER () AS total
-      FROM payments p LEFT JOIN attempts a ON a.id = p.attempt_id
-      WHERE p.created_at >= $1 AND p.created_at < $2 AND ($3::text IS NULL OR p.status = $3)
-      ORDER BY p.created_at DESC LIMIT $4 OFFSET $5`, [r.from, r.to, status, limit, (page - 1) * limit])
+      SELECT x.*, count(*) OVER () AS total FROM (
+        SELECT p.id, p.invoice_id, p.provider, p.method, p.phone, p.amount, p.status, p.source, p.link_sent, p.created_at, p.paid_at, p.attempt_id,
+               a.name AS attempt_name
+        FROM payments p LEFT JOIN attempts a ON a.id = p.attempt_id
+        WHERE p.created_at >= $1 AND p.created_at < $2 AND ($3::text IS NULL OR p.status = $3)${promoRows}
+      ) x
+      ORDER BY x.created_at DESC LIMIT $4 OFFSET $5`, [r.from, r.to, status, limit, (page - 1) * limit])
     return res.status(200).json({ ok: true, items: rows.map(({ total: _t, ...x }) => x), total: Number(rows[0]?.total ?? 0), page, limit })
   }
 
@@ -448,6 +459,32 @@ export default async function handler(req: Req, res: Res) {
       await logEvent({ type: 'trainer_self_start', attemptId: a.id, props: { trainerId: trainerMe.id } })
     }
     return res.status(200).json({ ok: true, id: a.id, link: prepaidLink(a.id) })
+  }
+
+  // ── Промокоды (только владелец): список, создание, включить/отключить ──
+  if (action === 'promos') {
+    if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' })
+    return res.status(200).json({ ok: true, items: await listPromos() })
+  }
+  if (action === 'promo-create') {
+    if (!isPost) return res.status(405).json({ ok: false })
+    const b = bodyOf(req) as { note?: string; uses?: number; code?: string }
+    const raw = String(b.code ?? '').trim()
+    const code = raw ? normCode(raw) : null
+    if (raw && !code) return res.status(400).json({ ok: false, error: 'code' })
+    const uses = Number(b.uses) || 1
+    if (uses < 1 || uses > 1000) return res.status(400).json({ ok: false, error: 'uses' })
+    const p = await createPromo({ note: String(b.note ?? ''), uses, code, by: 'admin' })
+    if (p === 'code_taken') return res.status(409).json({ ok: false, error: 'code_taken' })
+    await logEvent({ type: 'promo_created', props: { code: p.code, uses: p.max_uses, by: 'admin' } })
+    return res.status(200).json({ ok: true, promo: { ...p, status: promoStatus(p), link: promoLink(p.code), attempts: [] } })
+  }
+  if (action === 'promo-toggle') {
+    if (!isPost) return res.status(405).json({ ok: false })
+    const b = bodyOf(req) as { id?: number; active?: boolean }
+    const p = await togglePromo(Number(b.id) || 0, !!b.active)
+    if (!p) return res.status(404).json({ ok: false, error: 'not_found' })
+    return res.status(200).json({ ok: true, promo: { ...p, status: promoStatus(p) } })
   }
 
   // Подключить команды Telegram-бота: вебхук на /api/tg-webhook + меню команд в группе TG_CHAT_ID

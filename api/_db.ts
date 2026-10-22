@@ -115,6 +115,7 @@ export type AttemptRow = {
   notes: string
   retake_of: number | null
   self_trainer_id: number | null
+  promo_code?: string | null
 }
 
 export type AttemptMeta = { sid?: string | null; name?: string; lang?: 'ru' | 'kk'; attr?: Attribution }

@@ -20,19 +20,29 @@ function post<T>(path: string, body: object): Promise<T> {
 }
 
 export type Teaser = { dominant: NeuroKey; lowest: NeuroKey; combo: VideoKey }
-export type AttemptRes = { id: number; token: string; offline?: boolean; teaser?: Teaser; r?: string }
+export type AttemptRes = { id: number; token: string; offline?: boolean; teaser?: Teaser; r?: string; promoError?: string }
 
 export function startAttempt(p: { name: string; lang: Lang; id?: number; token?: string }): Promise<AttemptRes> {
   return post('/api/attempt', { action: 'start', ...p, sid: getSid(), attr: getAttr() })
 }
 
-export function finishAttempt(p: { id: number; token: string; answers: number[]; name: string; lang: Lang; retake?: string }): Promise<AttemptRes> {
+export function finishAttempt(p: { id: number; token: string; answers: number[]; name: string; lang: Lang; retake?: string; promo?: string }): Promise<AttemptRes> {
   return post('/api/attempt', { action: 'finish', ...p, sid: getSid(), attr: getAttr() })
 }
 
 export type CheckoutRes = { invoiceId?: string; paid?: boolean; r?: string }
 export function checkout(p: { id: number; token: string; phone: string; hp: string; testToken?: string }): Promise<CheckoutRes> {
   return post('/api/checkout', p)
+}
+
+/** Промокод вместо оплаты (номер нужен — туда уходит ссылка на результат). */
+export function checkoutPromo(p: { id: number; token: string; phone: string; code: string; hp: string }): Promise<CheckoutRes> {
+  return post('/api/checkout', { action: 'promo', ...p })
+}
+
+/** Ссылка /promo/<код>: можно ли ещё погасить код. */
+export function checkPromo(code: string): Promise<{ valid: boolean; reason: string | null; code?: string }> {
+  return post('/api/attempt', { action: 'promo-check', code, sid: getSid(), attr: getAttr() })
 }
 
 export type InvoiceStatus = { status: 'pending' | 'paid' | 'cancelled' | 'expired' | 'unknown'; r?: string }

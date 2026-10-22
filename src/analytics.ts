@@ -1,7 +1,7 @@
 // Пиксели Meta/TikTok + серверная воронка (beacon → /api/track).
 // ID пикселей — из env при сборке: VITE_META_PIXEL_ID, VITE_TIKTOK_PIXEL_ID (пусто — не грузим).
 // Адрес страницы уходит в пиксель целиком, поэтому на страницах с личным ключом в адресе
-// (?r= — результат, ?p= — тест, оплаченный вне сайта) пиксели не грузим и событий в них не шлём.
+// (?r= — результат, ?p= — тест, оплаченный вне сайта, ?promo= — промокод) пиксели не грузим и событий в них не шлём.
 import { getAttr } from './attribution'
 
 declare global {
@@ -21,7 +21,7 @@ export function setAttemptRef(ref: { id: number; token: string } | null) {
 }
 
 /** В адресе личный ключ доступа — его нельзя отдавать рекламным пикселям. */
-const hasAccessKey = () => /[?&][rp]=/.test(location.search)
+const hasAccessKey = () => /[?&](r|p|promo)=/.test(location.search)
 
 export function initAnalytics() {
   if (!hasAccessKey()) {

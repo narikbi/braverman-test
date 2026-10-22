@@ -3,7 +3,7 @@ import { $, showScreen, currentScreen } from '../dom'
 import { setNameExample, setLang } from '../i18n'
 import { EXAMPLE_NAMES } from '../content'
 import { state, save, resetForNewTest, setAttempt, hasProgress } from '../state'
-import { openPrepaid } from '../api'
+import { openPrepaid, checkPromo } from '../api'
 import { startQuiz, resumeQuiz } from './quiz'
 import { openResult } from './result'
 import { renderRecover } from './recover'
@@ -24,7 +24,9 @@ export function initIntro() {
       state.index = 0
       save()
     } else {
+      const promo = state.promo // промокод из ссылки переживает сброс — погасим его в конце теста
       resetForNewTest(name)
+      if (promo) { state.promo = promo; save() }
     }
     startQuiz()
   }
@@ -76,10 +78,36 @@ function animateNameExamples() {
   next(HOLD_MS)
 }
 
+let promoBad = false // ссылка с недействительным промокодом — один раз поясняем
+
 export function showIntro() {
   if (state.name) $<HTMLInputElement>('nameInput').value = state.name
   $('prepaidNote').hidden = !state.prepaid
+  $('promoNote').hidden = !state.promo || state.prepaid
+  $('promoBad').hidden = !promoBad
   showScreen('intro')
+}
+
+/**
+ * Ссылка /promo/<код>: проверяем код и убираем его из адреса. Действует — запоминаем, на главной
+ * пометка «тест в подарок», в конце теста результат сразу. Уже есть результат на этом устройстве —
+ * начинаем новый тест (подарок — значит, человек хочет пройти). Не действует — поясняем, тест как обычно.
+ * Возвращает true, если экран уже показан; false — дальше обычный маршрут.
+ */
+export async function startPromo(raw: string): Promise<boolean> {
+  history.replaceState(null, '', '/')
+  try {
+    const res = await checkPromo(raw)
+    if (!res.valid) { promoBad = true; return false }
+    if (state.resultToken) resetForNewTest(state.name)
+    state.promo = res.code || raw.trim().toUpperCase()
+    save()
+  } catch {
+    // сеть — код всё равно запомним: сервер проверит его при завершении теста
+    state.promo = raw.trim().toUpperCase()
+    save()
+  }
+  return false
 }
 
 /** Ссылка /?p=… (оплатил через менеджера): подставляем его попытку, после теста — сразу результат. */

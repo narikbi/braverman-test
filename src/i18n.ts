@@ -48,6 +48,8 @@ export function applyStatic() {
   $('t-disclaimer').textContent = u.disclaimer
   $('t-privacy').textContent = u.privacyLink
   $('prepaidNote').textContent = u.prepaidNote
+  $('promoNote').textContent = u.promoNote
+  $('promoBad').textContent = u.promoBad
 
   $('backBtn').textContent = u.back
   $('yesBtn').textContent = u.yes

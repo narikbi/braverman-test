@@ -89,10 +89,11 @@ async function finish() {
   save()
   const retake = state.retakeOf || undefined
   const prepaid = state.prepaid
-  if (retake || prepaid) showResultLoading()
+  const promo = state.promo || undefined
+  if (retake || prepaid || promo) showResultLoading()
   else renderCheckout({ loading: true })
   try {
-    const r = await finishAttempt({ id: state.attemptId, token: state.attemptToken, answers: state.answers, name: state.name, lang, retake })
+    const r = await finishAttempt({ id: state.attemptId, token: state.attemptToken, answers: state.answers, name: state.name, lang, retake, promo })
     if (r.id) setAttempt(r.id, r.token)
     if (r.teaser) { state.teaser = r.teaser; save() }
     if (r.r) {
@@ -100,15 +101,23 @@ async function finish() {
       finishing = false
       state.retakeOf = ''
       state.prepaid = false
+      state.promo = ''
       save()
       history.replaceState(null, '', `/?r=${r.r}`)
       return openResult(r.r)
+    }
+    if (r.promoError) {
+      // код из ссылки уже использован / отключён — обычная оплата с пояснением
+      finishing = false
+      state.promo = ''
+      save()
+      return renderCheckout({ promoError: T().ui.checkout.promoLinkUsed })
     }
   } catch (e) {
     console.error('finish_failed', e)
   }
   finishing = false
-  if (prepaid) {
+  if (prepaid || promo) {
     // оплачено вне сайта: оплата не нужна — показываем ошибку связи, после перезагрузки повторим
     $('resultLoading').hidden = true
     $('resultError').textContent = T().ui.errors.network

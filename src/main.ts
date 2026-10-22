@@ -4,7 +4,7 @@ import { captureAttribution } from './attribution'
 import { initAnalytics } from './analytics'
 import { applyStatic } from './i18n'
 import { state, clearAll, hasProgress, isFinished } from './state'
-import { initIntro, showIntro, startPrepaid } from './screens/intro'
+import { initIntro, showIntro, startPrepaid, startPromo } from './screens/intro'
 import { initQuiz, resumeQuiz, finishQuiz } from './screens/quiz'
 import { initCheckout, renderCheckout } from './screens/checkout'
 import { initWaiting, renderWaiting } from './screens/waiting'
@@ -19,14 +19,21 @@ initIntro(); initQuiz(); initCheckout(); initWaiting(); initResult(); initRecove
 const qs = new URLSearchParams(location.search)
 if (qs.get('reset') === '1') { clearAll(); history.replaceState(null, '', '/') }
 
+/** Обычный маршрут по сохранённому состоянию. */
+function route() {
+  if (state.resultToken) openResult(state.resultToken)
+  else if (state.invoiceId && isFinished()) renderWaiting()
+  else if (isFinished() && (state.prepaid || state.retakeOf || state.promo)) finishQuiz()
+  else if (isFinished()) renderCheckout({})
+  else if (hasProgress()) resumeQuiz()
+  else showIntro()
+}
+
 const r = qs.get('r')
 const p = qs.get('p')
+const promo = qs.get('promo')
 if (p) startPrepaid(p)
 else if (r) openResult(r)
 else if (qs.get('recover') === '1') renderRecover()
-else if (state.resultToken) openResult(state.resultToken)
-else if (state.invoiceId && isFinished()) renderWaiting()
-else if (isFinished() && (state.prepaid || state.retakeOf)) finishQuiz()
-else if (isFinished()) renderCheckout({})
-else if (hasProgress()) resumeQuiz()
-else showIntro()
+else if (promo) startPromo(promo).then(done => { if (!done) route() })
+else route()

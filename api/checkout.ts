@@ -1,9 +1,11 @@
 // POST /api/checkout — номер телефона → Kaspi-счёт на номер (через шлюз braverman-kaspi).
+// {action:'promo', code} — вместо оплаты промокод: номер нужен (ссылка на результат уходит в WhatsApp).
 // Результат открывается ТОЛЬКО после оплаты (вебхук шлюза / поллинг invoice-status).
-import { dbConfigured, getAttempt, setAttemptInvoice, findPendingInvoice, createPayment, logEvent, ipHash } from './_db.js'
+import { dbConfigured, getAttempt, setAttemptInvoice, findPendingInvoice, createPayment, logEvent, ipHash, countRecent } from './_db.js'
 import { verifyAttemptToken, makeResultToken } from './_access.js'
 import { kpaConfigured, createInvoice, isKaspiClient } from './_kpa.js'
-import { fulfillPaidInvoice } from './_fulfill.js'
+import { fulfillPaidInvoice, fulfillPromo } from './_fulfill.js'
+import { normCode, redeemPromo } from './_promo.js'
 import { bodyOf, normalizePhone, tgNotify, adminAttemptLink, PRICE, sourceLine } from './_lib.js'
 
 type Req = { method?: string; headers: Record<string, string | string[] | undefined>; body?: unknown }
@@ -31,6 +33,21 @@ export default async function handler(req: Req, res: Res) {
 
   const phone = normalizePhone(b.phone)
   if (!phone) return res.status(400).json({ ok: false, error: 'phone' })
+
+  // Промокод вместо оплаты. Перебор кодов режем: больше 10 неверных за 15 минут с одного IP — пауза.
+  if (b.action === 'promo') {
+    const ip = ipHash(req.headers)
+    if (await countRecent('promo_failed', 'ip_hash', ip, 15) >= 10) return res.status(429).json({ ok: false, error: 'too_many' })
+    const code = normCode(b.code)
+    const red = code ? await redeemPromo(id, code, phone) : { ok: false as const, reason: 'not_found' as const }
+    if (!red.ok) {
+      if (red.reason === 'already_paid') return res.status(200).json({ ok: true, paid: true, r: makeResultToken(id) })
+      await logEvent({ type: 'promo_failed', sid: attempt.sid, attemptId: id, trainerCode: attempt.trainer_code, utm: attempt.utm, ipHash: ip, props: { code: String(b.code ?? '').slice(0, 40), reason: red.reason, via: 'checkout' } })
+      return res.status(400).json({ ok: false, error: red.reason === 'not_found' ? 'promo_not_found' : 'promo_used' })
+    }
+    await fulfillPromo(red.attempt, red.promo, 'checkout')
+    return res.status(200).json({ ok: true, paid: true, r: makeResultToken(id) })
+  }
 
   // Тестовый счёт на TEST_AMOUNT (1 ₸) — только по секретной ссылке ?test=<TEST_TOKEN>
   const testAmount = b.testToken && process.env.TEST_TOKEN && b.testToken === process.env.TEST_TOKEN ? Number(process.env.TEST_AMOUNT || 1) : undefined
