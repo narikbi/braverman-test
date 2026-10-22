@@ -34,11 +34,11 @@ function db(): pg.Pool | null {
 async function run<T>(text: string, params: unknown[]): Promise<T[]> {
   const sql = db()
   if (!sql) throw new Error('db_not_configured')
-  const rows = await Promise.race([
-    sql.query(text, params) as Promise<unknown>,
+  const res = await Promise.race([
+    sql.query(text, params),
     new Promise<never>((_, rej) => setTimeout(() => rej(new Error('db_timeout')), 4000))
   ])
-  return rows as T[]
+  return res.rows as T[]
 }
 
 /** Запрос с таймаутом 4 с; при ошибке — пустой массив. tag — для логов. */
