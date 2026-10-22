@@ -23,7 +23,11 @@ export function dbConfigured(): boolean {
 let pool: pg.Pool | null = null
 function db(): pg.Pool | null {
   if (!dbConfigured()) return null
-  if (!pool) pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2, idleTimeoutMillis: 10000, connectionTimeoutMillis: 4000 })
+  if (!pool) {
+    pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2, idleTimeoutMillis: 10000, connectionTimeoutMillis: 4000 })
+    // search_path задаём на каждом новом соединении: у пулера Neon он пустой, и «FROM leads» без схемы не находит таблицу
+    pool.on('connect', c => { c.query('SET search_path TO public').catch(() => {}) })
+  }
   return pool
 }
 
