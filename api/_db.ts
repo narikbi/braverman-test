@@ -1,8 +1,8 @@
-// Слой БД (Neon Postgres). Модель attempt-centric: одна строка на прохождение теста.
+// Слой БД (Postgres: Neon → Fly). Модель attempt-centric: одна строка на прохождение теста.
 // q()  — для аналитики/отчётности: таймаут 4 с, ошибки глотаются (тест не должен падать из-за базы).
 // qx() — для критичных записей (попытка, счёт, оплата): ошибка пробрасывается, чтобы не выставить счёт без записи.
 import crypto from 'node:crypto'
-import { neon } from '@neondatabase/serverless'
+import pg from 'pg'
 import type { NeuroKey, Scores, VideoKey } from '../shared/scoring.js'
 
 export type AttemptStatus = 'started' | 'finished' | 'invoice' | 'paid'
@@ -18,12 +18,13 @@ export function dbConfigured(): boolean {
   return !!process.env.DATABASE_URL
 }
 
-type Sql = ReturnType<typeof neon>
-let client: Sql | null = null
-function db(): Sql | null {
+// Пул на инстанс функции: соединения закрываются через 10 с простоя, чтобы база могла засыпать (scale to zero).
+// SSL берётся из sslmode в DATABASE_URL (Neon и Fly Postgres — verify-full).
+let pool: pg.Pool | null = null
+function db(): pg.Pool | null {
   if (!dbConfigured()) return null
-  if (!client) client = neon(process.env.DATABASE_URL!)
-  return client
+  if (!pool) pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2, idleTimeoutMillis: 10000, connectionTimeoutMillis: 4000 })
+  return pool
 }
 
 async function run<T>(text: string, params: unknown[]): Promise<T[]> {

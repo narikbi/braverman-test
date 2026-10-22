@@ -1,7 +1,7 @@
-// Применяет db/schema.sql к Neon. DATABASE_URL берётся из env или из .env.local / .env.
+// Применяет db/schema.sql к базе (Postgres). DATABASE_URL берётся из env или из .env.local / .env.
 // Neon HTTP не принимает несколько statement'ов в одном запросе — выполняем по одному.
 import { readFileSync, existsSync } from 'node:fs'
-import { neon } from '@neondatabase/serverless'
+import pg from 'pg'
 
 function loadEnvFile(file) {
   if (!existsSync(file)) return
@@ -19,11 +19,13 @@ loadEnvFile('.env')
 const url = process.env.DATABASE_URL
 if (!url) { console.error('DATABASE_URL не задан (vercel env pull или .env)'); process.exit(1) }
 
-const sql = neon(url)
+const sql = new pg.Client({ connectionString: url })
+await sql.connect()
 const statements = readFileSync('db/schema.sql', 'utf8')
   .split(/;\s*\n/)
   .map(s => s.replace(/^\s*--.*$/gm, '').trim())
   .filter(Boolean)
 let n = 0
 for (const st of statements) { await sql.query(st); n++ }
+await sql.end()
 console.log(`OK: ${n} statements applied`)
