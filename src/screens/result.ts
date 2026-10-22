@@ -3,9 +3,9 @@ import { $, esc, showScreen, currentScreen } from '../dom'
 import { state, save, clearAll, resetForNewTest } from '../state'
 import { T, lang, onLangChange } from '../i18n'
 import { getResult, ApiError, type ResultPayload } from '../api'
-import { renderProfileChart, chartImage } from '../chart'
+import { renderProfileChart, chartImage, pairWinner } from '../chart'
 import { renderVideo, relabelVideo, stopVideo } from '../video'
-import { NEURO_ORDER, NEURO_COLOR, type NeuroKey } from '../../shared/scoring'
+import { NEURO_ORDER, NEURO_COLOR, BLOCK_PAIRS, type NeuroKey } from '../../shared/scoring'
 import { showIntro } from './intro'
 import { authorRow } from '../author'
 import { startQuiz } from './quiz'
@@ -93,11 +93,18 @@ function render(d: ResultPayload) {
   $('dominantMeta').textContent = `${dom.lobe} · ${dom.func}`
   $('dominantDesc').textContent = dom.description
 
+  // в каждой паре (Дофамин–Ацетилхолин, ГАМК–Серотонин) победитель — жирным, второй — приглушённо; при равенстве — как есть
+  const rowCls: Partial<Record<NeuroKey, string>> = {}
+  for (const p of BLOCK_PAIRS) {
+    const w = pairWinner(d.scores, p)
+    if (w) for (const k of p) rowCls[k] = k === w ? 'win' : 'lose'
+  }
   const list = $('scoreList')
   list.innerHTML = ''
   NEURO_ORDER.forEach(k => {
     const fillW = Math.round((d.scores[k] / d.max) * 100)
     const li = document.createElement('li')
+    li.className = rowCls[k] ?? ''
     li.innerHTML =
       `<span class="dot" style="background:${NEURO_COLOR[k]}"></span>` +
       `<span class="label">${esc(N[k].name)}</span>` +
@@ -108,7 +115,7 @@ function render(d: ResultPayload) {
   const low = N[d.lowest]
   $('lowNote').innerHTML = `<b>${esc(T().ui.lowPrefix)} — ${esc(low.name)} (${d.scores[d.lowest]} / ${d.max}):</b> ${esc(low.lowNote)}`
 
-  renderProfileChart($<HTMLCanvasElement>('chart'), d.scores, d.max, d.dominant, NEURO_ORDER.map(k => N[k].name), { tooltip: T().ui.tooltip })
+  renderProfileChart($<HTMLCanvasElement>('chart'), d.scores, d.max, d.dominant, NEURO_ORDER.map(k => N[k].name), { text: { lead: T().ui.pairLead, tie: T().ui.pairTie } })
 
   const url = resultUrl()
   $('resultLinkText').textContent = url

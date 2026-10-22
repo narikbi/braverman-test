@@ -341,6 +341,9 @@ html, body {
   border-radius: 999px; overflow: hidden;
 }
 .score-list .fill { display: block; height: 100%; border-radius: 999px; }
+.score-list li.win .label, .score-list li.win .pct { font-weight: 800; }
+.score-list li.lose { color: var(--muted); }
+.score-list li.lose .dot, .score-list li.lose .fill { opacity: .4; }
 
 .low-note {
   margin-top: 20px;

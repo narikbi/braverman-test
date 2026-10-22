@@ -46,7 +46,9 @@ export type UiText = {
   resultEyebrow: string
   chartTitle: string
   lowPrefix: string
-  tooltip: (v: number, m: number) => string
+  /** плашки на графике по парам: победитель пары / равенство баллов */
+  pairLead: string
+  pairTie: string
   download: string
   restart: string
   videoTitle: string
