@@ -1,31 +1,82 @@
-// Видео-разбор на экране результата: свой плеер (R2, без брендинга) с фолбэком на YouTube.
-import { VIDEO_BASE, VIDEOS } from './content/videos'
+// Видео-разбор на экране результата: свой плеер без брендинга.
+// Источник — HLS с несколькими качествами (video.braverman.kz, см. content/videos.ts): плеер сам выбирает
+// качество по скорости сети. Safari (iPhone/iPad/Mac) играет HLS сам, остальным подгружаем hls.js.
+// Если HLS не загрузился — запасной mp4 одним файлом; если и он не пошёл — текст с кнопкой «Обновить».
+import { VIDEO_BASE, hlsUrl, posterUrl, mp4Url } from './content/videos'
 import { LANGS, type Lang } from './content'
 import { T } from './i18n'
 import { $ } from './dom'
 import { track } from './analytics'
 import type { VideoKey } from '../shared/scoring'
+import type Hls from 'hls.js'
 
 let videoKey: VideoKey | null = null
 let videoLang: Lang = 'ru'
 let playTracked = false
+let hls: Hls | null = null
+let gen = 0 // номер текущей загрузки: ответы старых (смена языка/экрана) игнорируем
 
-function setSrc(key: VideoKey, code: Lang) {
-  const player = $<HTMLVideoElement>('videoPlayer')
-  const frame = $<HTMLIFrameElement>('videoFrame')
-  const youtubeId = VIDEOS[key][code]
-  const yt = () => {
-    player.hidden = true
-    player.removeAttribute('src')
-    frame.hidden = false
-    frame.src = `https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0&playsinline=1`
+const player = () => $<HTMLVideoElement>('videoPlayer')
+
+function destroyHls() {
+  hls?.destroy()
+  hls = null
+}
+
+function showError(show: boolean) {
+  const el = $('videoError')
+  el.hidden = !show
+  if (show) el.innerHTML = `${T().ui.videoError} <button type="button" class="link-btn" id="videoRetry">${T().ui.videoRetry}</button>`
+  $('videoRetry')?.addEventListener('click', () => { if (videoKey) setSrc(videoKey, videoLang) })
+}
+
+/** Запасной вариант: обычный mp4 (один файл, без адаптации качества). */
+function playMp4(key: VideoKey, code: Lang, my: number) {
+  const v = player()
+  destroyHls()
+  v.onerror = () => { if (my === gen) showError(true) }
+  v.src = mp4Url(key, code)
+}
+
+async function setSrc(key: VideoKey, code: Lang) {
+  const my = ++gen
+  const v = player()
+  showError(false)
+  destroyHls()
+  v.hidden = false
+  v.poster = posterUrl(key, code)
+  v.onerror = null
+  v.removeAttribute('src')
+  const src = hlsUrl(key, code)
+
+  // Safari умеет HLS сам — отдаём манифест напрямую
+  if (v.canPlayType('application/vnd.apple.mpegurl')) {
+    v.onerror = () => { if (my === gen) playMp4(key, code, my) }
+    v.src = src
+    return
   }
-  if (!VIDEO_BASE) return yt()
-  frame.hidden = true
-  frame.src = ''
-  player.hidden = false
-  player.onerror = yt // файл в R2 не открылся — YouTube
-  player.src = `${VIDEO_BASE}/${key}-${code}.mp4`
+  try {
+    const { default: HlsCtor } = await import('hls.js')
+    if (my !== gen) return
+    if (!HlsCtor.isSupported()) return playMp4(key, code, my)
+    const h = new HlsCtor({ maxBufferLength: 30, backBufferLength: 30, startLevel: -1, capLevelToPlayerSize: true })
+    hls = h
+    h.on(HlsCtor.Events.ERROR, (_e, data) => {
+      if (!data.fatal || my !== gen) return
+      // сеть моргнула — пробуем ещё раз, иначе (или после повтора) — mp4
+      if (data.type === HlsCtor.ErrorTypes.NETWORK_ERROR && !(data as { retried?: boolean }).retried) {
+        ;(data as { retried?: boolean }).retried = true
+        setTimeout(() => { if (my === gen) h.startLoad() }, 1500)
+        return
+      }
+      if (data.type === HlsCtor.ErrorTypes.MEDIA_ERROR) { h.recoverMediaError(); return }
+      playMp4(key, code, my)
+    })
+    h.loadSource(src)
+    h.attachMedia(v)
+  } catch {
+    if (my === gen) playMp4(key, code, my) // hls.js не загрузился
+  }
 }
 
 function renderSwitch() {
@@ -47,6 +98,7 @@ function renderSwitch() {
 }
 
 export function renderVideo(key: VideoKey, initialLang: Lang) {
+  if (!VIDEO_BASE) return
   videoKey = key
   videoLang = initialLang
   playTracked = false
@@ -54,8 +106,7 @@ export function renderVideo(key: VideoKey, initialLang: Lang) {
   $('videoTitle').textContent = T().ui.videoTitle
   renderSwitch()
   setSrc(key, videoLang)
-  const player = $<HTMLVideoElement>('videoPlayer')
-  player.onplay = () => { if (!playTracked) { playTracked = true; track('VideoPlay') } }
+  player().onplay = () => { if (!playTracked) { playTracked = true; track('VideoPlay') } }
 }
 
 /** Подписи на текущем языке интерфейса (после смены языка). */
@@ -63,15 +114,18 @@ export function relabelVideo() {
   if (!videoKey) return
   $('videoTitle').textContent = T().ui.videoTitle
   renderSwitch()
+  if (!$('videoError').hidden) showError(true)
 }
 
 export function stopVideo() {
-  const player = $<HTMLVideoElement>('videoPlayer')
-  player.pause()
-  player.removeAttribute('src')
-  player.hidden = true
-  $<HTMLIFrameElement>('videoFrame').src = ''
-  $('videoFrame').hidden = true
+  gen++
+  const v = player()
+  v.pause()
+  destroyHls()
+  v.removeAttribute('src')
+  v.removeAttribute('poster')
+  v.hidden = true
+  showError(false)
   $('videoCard').hidden = true
   videoKey = null
 }

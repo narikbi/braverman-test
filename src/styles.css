@@ -372,7 +372,8 @@ html, body {
   overflow: hidden;
   background: #000;
 }
-.video-wrap iframe,
+.video-error { margin-top: 12px; padding: 10px 14px; border-radius: var(--radius-sm); background: #FFF7ED; border: 1px solid #FED7AA; color: #9A3412; font-size: 14px; text-align: center; }
+.video-error .link-btn { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .video-wrap video {
   width: 100%;
   height: 100%;

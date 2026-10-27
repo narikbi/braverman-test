@@ -33,6 +33,8 @@ export const KK: Content = {
     restart: 'Қайта өту',
     videoTitle: 'Нәтижеңіздің видео-талдауы',
     videoLangs: { kk: 'Қазақша', ru: 'Орысша' },
+    videoError: 'Видео жүктелмеді. Интернетті тексеріп, қайта көріңіз.',
+    videoRetry: 'Қайта жүктеу',
     fileName: 'нейропрофиль',
     recoverLink: 'Тестті бұрын өткенсіз бе? Нәтижені ашу',
     authorRole: 'Жоба авторы',

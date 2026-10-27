@@ -53,6 +53,9 @@ export type UiText = {
   restart: string
   videoTitle: string
   videoLangs: Record<Lang, string>
+  /** видео не загрузилось + кнопка повтора */
+  videoError: string
+  videoRetry: string
   fileName: string
   recoverLink: string
   checkout: {

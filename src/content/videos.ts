@@ -1,19 +1,13 @@
-// Видео-разборы результатов: 8 комбинаций × 2 языка.
-// Основной хостинг — Cloudflare R2 (файлы <ключ>-<язык>.mp4, база из VITE_VIDEO_BASE),
-// YouTube-ID — запасной вариант, если файл в R2 не загрузился.
+// Видео-разборы результатов: 8 комбинаций × 2 языка, файлы называются <ключ>-<язык>.
+// Хостинг — Cloudflare R2 через свой домен (VITE_VIDEO_BASE, напр. https://video.braverman.kz):
+//   hls/<ключ>-<язык>/master.m3u8  — HLS с качествами 1080p/720p/480p/360p (основной источник)
+//   hls/<ключ>-<язык>/poster.jpg    — кадр-превью
+//   <ключ>-<язык>.mp4               — исходный файл одним куском (запасной вариант)
 import type { VideoKey } from '../../shared/scoring'
 import type { Lang } from './index'
 
-export const VIDEO_BASE: string = (import.meta.env.VITE_VIDEO_BASE as string | undefined) || 'https://pub-5a014c13711042d6b1b4e8d96d558550.r2.dev'
+export const VIDEO_BASE: string = ((import.meta.env.VITE_VIDEO_BASE as string | undefined) || 'https://video.braverman.kz').replace(/\/$/, '')
 
-export const VIDEOS: Record<VideoKey, Record<Lang, string>> = {
-  //                                қазақша              орысша
-  'dopamine-gaba':            { kk: 'HeVNed6JpAQ', ru: 'HdiWrCP3ZJY' }, // 01 / 02 Дофамин-ГАМК
-  'dopamine-serotonin':       { kk: '-W7hPYI_qXo', ru: 'PQOPnX9xssU' }, // 03 / 04 Дофамин-Серотонин
-  'acetylcholine-gaba':       { kk: '6dS4r3QpVSo', ru: 'LfY6_qn8Ej4' }, // 05 / 06 Холин-ГАМК
-  'acetylcholine-serotonin':  { kk: 'I7gCAleBA1M', ru: 'kJkEs9lIGZQ' }, // 07 / 08 Холин-Серотонин
-  'gaba-dopamine':            { kk: 'WPLr0clqwWg', ru: '9jR4a6plXb8' }, // 09 / 10 ГАМК-Дофамин
-  'gaba-acetylcholine':       { kk: '-CZSMMq0qBo', ru: '-ISffjMr_l0' }, // 11 / 12 ГАМК-Холин
-  'serotonin-dopamine':       { kk: 'voj5RPHNZNE', ru: 'wJnmcY2ORP0' }, // 13 / 14 Серотонин-Дофамин
-  'serotonin-acetylcholine':  { kk: 'WpBzYcV70wI', ru: 'hlTg5gR0dCk' }  // 15 / 16 Серотонин-Холин
-}
+export const hlsUrl = (key: VideoKey, lang: Lang) => `${VIDEO_BASE}/hls/${key}-${lang}/master.m3u8`
+export const posterUrl = (key: VideoKey, lang: Lang) => `${VIDEO_BASE}/hls/${key}-${lang}/poster.jpg`
+export const mp4Url = (key: VideoKey, lang: Lang) => `${VIDEO_BASE}/${key}-${lang}.mp4`
