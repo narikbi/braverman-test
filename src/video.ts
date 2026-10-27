@@ -61,15 +61,16 @@ async function setSrc(key: VideoKey, code: Lang) {
     if (!HlsCtor.isSupported()) return playMp4(key, code, my)
     const h = new HlsCtor({ maxBufferLength: 30, backBufferLength: 30, startLevel: -1, capLevelToPlayerSize: true })
     hls = h
+    let netRetries = 0
+    let mediaRetries = 0
     h.on(HlsCtor.Events.ERROR, (_e, data) => {
       if (!data.fatal || my !== gen) return
-      // сеть моргнула — пробуем ещё раз, иначе (или после повтора) — mp4
-      if (data.type === HlsCtor.ErrorTypes.NETWORK_ERROR && !(data as { retried?: boolean }).retried) {
-        ;(data as { retried?: boolean }).retried = true
+      // сеть моргнула — пробуем ещё пару раз, потом — mp4
+      if (data.type === HlsCtor.ErrorTypes.NETWORK_ERROR && netRetries++ < 2) {
         setTimeout(() => { if (my === gen) h.startLoad() }, 1500)
         return
       }
-      if (data.type === HlsCtor.ErrorTypes.MEDIA_ERROR) { h.recoverMediaError(); return }
+      if (data.type === HlsCtor.ErrorTypes.MEDIA_ERROR && mediaRetries++ < 2) { h.recoverMediaError(); return }
       playMp4(key, code, my)
     })
     h.loadSource(src)
