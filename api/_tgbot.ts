@@ -5,6 +5,7 @@ import crypto from 'node:crypto'
 import { tgCall, SITE, sourceParts, formatSource, utmParts, youtubeIdOf, youtubeTitle, isAdMedium } from './_lib.js'
 import { createPromo, promoLink, timesRu } from './_promo.js'
 import { logEvent } from './_db.js'
+import { abBrief } from './_ab.js'
 import { rangeFor, kpi, funnelCounts, sourcesStats, trainersStats, recentPaid, ALL, FUNNEL_TYPES, FUNNEL_LABELS, type Kpi } from './_stats.js'
 
 // ── вебхук ──
@@ -133,6 +134,9 @@ export async function periodReport(p: Preset): Promise<string> {
     `визит → оплата: ${k.convVisitPaid}%`,
     `прошли тест → оплата: ${k.convFinishPaid}%`,
     `начали → прошли тест: ${k.convStartFinish}%`)
+  // A/B-эксперимент: короткая строка про вариант Б (пока на /b никто не заходил — пусто)
+  const ab = await abBrief(r.from, r.to).catch(() => '')
+  if (ab) out.push('', ab)
 
   // источники: сворачиваем utm_content, сортируем по выручке
   // ролики YouTube (braverman.kz/yt/<id>) различаем по ID; у рекламы каждое объявление отдельно (utm_content),

@@ -18,6 +18,7 @@ import { tgConfigured, tgNotify, SITE, PRICE, bodyOf, queryOf, normalizePhone, a
 import { makePrepaidToken, makeResultToken } from './_access.js'
 import { blockedPairs } from '../shared/scoring.js'
 import { tgSetup, tgStatus } from './_tgbot.js'
+import { ensureAbSchema, abReport } from './_ab.js'
 import { ensurePromoSchema, createPromo, listPromos, togglePromo, normCode, promoStatus, promoLink } from './_promo.js'
 import { almatyDate, parseRange, funnelCounts, kpi, sourcesStats, trainersStats, FUNNEL_TYPES, FUNNEL_LABELS, type Scope } from './_stats.js'
 
@@ -189,6 +190,9 @@ export default async function handler(req: Req, res: Res) {
   if (!dbConfigured()) return res.status(503).json({ ok: false, error: 'db_not_configured' })
   // колонка attempts.promo_code и таблица promo_codes — создаются при первом обращении
   const promoReady = await ensurePromoSchema().then(() => true, e => { console.error('promo_schema_failed', e); return false })
+  // A/B-эксперимент: колонки variant; фильтр ?variant=a|b — только владельцу (панель варианта Б)
+  const abReady = await ensureAbSchema().then(() => true, e => { console.error('ab_schema_failed', e); return false })
+  const variant = isAdmin && abReady && (p.get('variant') === 'a' || p.get('variant') === 'b') ? p.get('variant') : null
   const r = parseRange(p)
 
   if (action === 'overview') {
@@ -204,13 +208,16 @@ export default async function handler(req: Req, res: Res) {
 
   if (action === 'timeline') {
     const rows = await q<{ t: string; views: string; started: string; finished: string; paid: string; revenue: string }>('timeline', `
-      SELECT date_trunc($3, ts AT TIME ZONE 'Asia/Almaty') AS t,
-        count(DISTINCT sid) FILTER (WHERE type = 'page_view')   AS views,
-        count(*) FILTER (WHERE type = 'quiz_start')              AS started,
-        count(*) FILTER (WHERE type = 'quiz_finish')             AS finished,
-        count(*) FILTER (WHERE type = 'paid')                    AS paid,
-        COALESCE(sum((props->>'amount')::numeric) FILTER (WHERE type = 'paid' AND props->>'amount' ~ '^[0-9.]+$'), 0) AS revenue
-      FROM events WHERE ts >= $1 AND ts < $2 AND ($4::text IS NULL OR trainer_code = $4) GROUP BY 1 ORDER BY 1`, [r.from, r.to, r.bucket, scope.trainerCode])
+      SELECT date_trunc($3, e.ts AT TIME ZONE 'Asia/Almaty') AS t,
+        count(DISTINCT e.sid) FILTER (WHERE e.type = 'page_view')   AS views,
+        count(*) FILTER (WHERE e.type = 'quiz_start')              AS started,
+        count(*) FILTER (WHERE e.type = 'quiz_finish')             AS finished,
+        count(*) FILTER (WHERE e.type = 'paid')                    AS paid,
+        COALESCE(sum((e.props->>'amount')::numeric) FILTER (WHERE e.type = 'paid' AND e.props->>'amount' ~ '^[0-9.]+$'), 0) AS revenue
+      FROM events e ${variant ? 'LEFT JOIN attempts a ON a.id = e.attempt_id' : ''}
+      WHERE e.ts >= $1 AND e.ts < $2 AND ($4::text IS NULL OR e.trainer_code = $4)
+        ${variant ? `AND split_part(COALESCE(a.variant, e.variant, 'a'), ':', 1) = $5` : ''}
+      GROUP BY 1 ORDER BY 1`, [r.from, r.to, r.bucket, scope.trainerCode, ...(variant ? [variant] : [])])
     return res.status(200).json({
       ok: true, bucket: r.bucket, from: r.from, to: r.to,
       points: rows.map(x => ({ t: x.t, views: +x.views, started: +x.started, finished: +x.finished, paid: +x.paid, revenue: isAdmin ? +x.revenue : 0 }))
@@ -218,8 +225,15 @@ export default async function handler(req: Req, res: Res) {
   }
 
   if (action === 'sources') {
-    const rows = await sourcesStats(r.from, r.to, scope.trainerCode)
+    const rows = await sourcesStats(r.from, r.to, scope.trainerCode, variant)
     return res.status(200).json({ ok: true, rows: isAdmin ? rows : rows.map(x => ({ ...x, revenue: 0 })) })
+  }
+
+  // A/B-эксперимент: панель варианта Б и сравнение А/Б (только владелец)
+  if (action === 'ab') {
+    if (!isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' })
+    if (!abReady) return res.status(503).json({ ok: false, error: 'ab_schema' })
+    return res.status(200).json({ ok: true, ...(await abReport(r)) })
   }
 
   if (action === 'trainers-stats') {
@@ -242,7 +256,7 @@ export default async function handler(req: Req, res: Res) {
     const rows = await q<Record<string, unknown> & { total: string; phone: string | null }>('attempts', `
       SELECT a.id, a.created_at, a.name, a.phone, a.lang, a.status, a.answered, a.dominant, a.combo, a.paid_by,
              a.dopamine, a.acetylcholine, a.gaba, a.serotonin, a.finished_at, a.paid_at, a.test_amount, a.invoice_id, a.trainer_code,
-             ${promoReady ? 'a.promo_code' : 'NULL AS promo_code'}, a.utm->>'utm_source' AS source, a.utm->>'utm_campaign' AS campaign, t.name AS trainer_name, t.id AS trainer_id,
+             ${promoReady ? 'a.promo_code' : 'NULL AS promo_code'}, ${abReady ? 'a.variant' : 'NULL AS variant'}, a.utm->>'utm_source' AS source, a.utm->>'utm_campaign' AS campaign, t.name AS trainer_name, t.id AS trainer_id,
              count(*) OVER () AS total
       FROM attempts a LEFT JOIN trainers t ON t.id = a.trainer_id
       WHERE a.created_at >= $1 AND a.created_at < $2
@@ -276,13 +290,13 @@ export default async function handler(req: Req, res: Res) {
       a.trainer_id ? getTrainer(a.trainer_id) : Promise.resolve(null)
     ])
     const attempt: Partial<AttemptRow> = { ...a }
-    if (!isAdmin) { delete attempt.notes; delete attempt.invoice_error; delete attempt.invoice_ref; if (!seesPhone(session)) attempt.phone = maskPhone(a.phone) }
+    if (!isAdmin) { delete attempt.notes; delete attempt.invoice_error; delete attempt.invoice_ref; delete attempt.wa_phone; delete attempt.wa_consent_at; if (!seesPhone(session)) attempt.phone = maskPhone(a.phone) }
     if (!isAdmin && a.status !== 'paid') Object.assign(attempt, hideUnpaid(attempt as Record<string, unknown>), { answers: null })
     // в ленте событий у неоплаченного тоже не показываем тип (quiz_finish хранит dominant/combo)
     const evs = !isAdmin && a.status !== 'paid'
       ? (events as { props?: Record<string, unknown> }[]).map(e => ({ ...e, props: Object.fromEntries(Object.entries(e.props || {}).filter(([k]) => !['dominant', 'lowest', 'combo'].includes(k))) }))
       : events
-    return res.status(200).json({ ok: true, attempt, payments, events: evs, trainer: trainer ? { id: trainer.id, name: trainer.name, code: trainer.code } : null, resultLink: a.status === 'paid' && a.dominant != null ? resultLink(a.id) : null, prepaidLink: isAdmin && a.paid_by === 'prepaid' && a.dominant == null ? prepaidLink(a.id) : null })
+    return res.status(200).json({ ok: true, attempt, payments, events: evs, trainer: trainer ? { id: trainer.id, name: trainer.name, code: trainer.code } : null, resultLink: a.status === 'paid' && a.dominant != null ? resultLink(a) : null, prepaidLink: isAdmin && a.paid_by === 'prepaid' && a.dominant == null ? prepaidLink(a.id) : null })
   }
 
   if (action === 'payments') {
@@ -344,7 +358,7 @@ export default async function handler(req: Req, res: Res) {
       a = (await grantManualPaid(id)) ?? a
     }
     if (a.status !== 'paid') return res.status(400).json({ ok: false, error: 'unpaid' })
-    const link = resultLink(id)
+    const link = resultLink(a)
     let waSent = false
     if ((b.send || action === 'attempt-resend') && a.phone) {
       waSent = (await sendLinkTemplate(a.phone, a.name, link, a.lang)).sent
@@ -402,7 +416,7 @@ export default async function handler(req: Req, res: Res) {
     if (!Number.isFinite(amount) || amount < 0 || amount > 1_000_000) return res.status(400).json({ ok: false, error: 'amount' })
     const method = PREPAID_METHODS.includes(String(b.method)) ? String(b.method) : 'Другое'
     const a = before.status === 'paid' ? before : ((await grantManualPaid(id, amount, method)) ?? before)
-    const link = resultLink(id)
+    const link = resultLink(a)
     let waSent = false
     if (b.send && a.phone && whatsappConfigured()) {
       waSent = (await sendLinkTemplate(a.phone, a.name, link, a.lang)).sent

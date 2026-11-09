@@ -56,6 +56,8 @@ export async function openResult(r: string) {
   showResultLoading()
   try {
     const data = await getResult(r)
+    // A/B-эксперимент: результат попытки варианта Б показываем на его странице (ссылка из WhatsApp всегда ведёт сюда)
+    if (data.variant?.startsWith('b')) return location.replace(`/b?r=${encodeURIComponent(r)}`)
     last = data
     state.resultToken = r
     save()

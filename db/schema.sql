@@ -128,3 +128,12 @@ CREATE TABLE IF NOT EXISTS promo_codes (
 );
 ALTER TABLE attempts ADD COLUMN IF NOT EXISTS promo_code text;
 CREATE INDEX IF NOT EXISTS attempts_promo_idx ON attempts (promo_code) WHERE promo_code IS NOT NULL;
+
+-- A/B-эксперимент: вариант Б воронки (braverman.kz/b), см. api/_ab.ts (колонки создаёт и само приложение — ensureAbSchema).
+-- attempts.variant: NULL — обычный сайт (вариант А); 'b', 'b:work', 'b:love' — вариант Б и нарезка.
+-- events.variant заполняется только у событий, присланных страницей Б; серверные события берут вариант из попытки.
+ALTER TABLE attempts ADD COLUMN IF NOT EXISTS variant text;
+ALTER TABLE attempts ADD COLUMN IF NOT EXISTS wa_phone text;
+ALTER TABLE attempts ADD COLUMN IF NOT EXISTS wa_consent_at timestamptz;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS variant text;
+CREATE INDEX IF NOT EXISTS attempts_variant_idx ON attempts (variant) WHERE variant IS NOT NULL;

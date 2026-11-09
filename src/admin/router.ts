@@ -1,5 +1,5 @@
-// Hash-роутер: #/ #/attempts #/attempts/:id #/payments #/promos #/chats #/chats/:phone #/trainers #/trainers/:id #/health #/me #/login
-export type Route = { name: 'dashboard' | 'attempts' | 'attempt' | 'payments' | 'promos' | 'chats' | 'trainers' | 'trainer' | 'health' | 'me' | 'login'; id?: number; phone?: string }
+// Hash-роутер: #/ #/attempts #/attempts/:id #/payments #/promos #/ab #/ab/compare #/chats #/chats/:phone #/trainers #/trainers/:id #/health #/me #/login
+export type Route = { name: 'dashboard' | 'attempts' | 'attempt' | 'payments' | 'promos' | 'ab' | 'ab-compare' | 'chats' | 'trainers' | 'trainer' | 'health' | 'me' | 'login'; id?: number; phone?: string }
 
 export function parseRoute(): Route {
   const h = location.hash.replace(/^#\/?/, '')
@@ -9,6 +9,7 @@ export function parseRoute(): Route {
   if (seg === 'trainers') return id ? { name: 'trainer', id: Number(id) } : { name: 'trainers' }
   if (seg === 'payments') return { name: 'payments' }
   if (seg === 'promos') return { name: 'promos' }
+  if (seg === 'ab') return { name: id === 'compare' ? 'ab-compare' : 'ab' } // A/B-эксперимент
   if (seg === 'chats') return { name: 'chats', phone: id || undefined }
   if (seg === 'health') return { name: 'health' }
   if (seg === 'me') return { name: 'me' }

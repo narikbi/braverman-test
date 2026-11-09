@@ -6,11 +6,15 @@ import { makeResultToken } from './_access.js'
 import { sendLinkTemplate, whatsappConfigured, fmtWaNumber } from './_whatsapp.js'
 import { tgNotify, adminAttemptLink, SITE, sheetMirror, sourceLine, tgEsc } from './_lib.js'
 import type { PromoRow } from './_promo.js'
+import { variantLine } from './_ab.js'
 import { blockedPairs } from '../shared/scoring.js'
 import type { AttemptRow } from './_db.js'
 
-export function resultLink(attemptId: number): string {
-  return `${SITE()}/?r=${makeResultToken(attemptId)}`
+/** Ссылка на результат. Для попыток варианта Б (attempts.variant = 'b…') — на страницу /b. */
+export function resultLink(a: number | { id: number; variant?: string | null }): string {
+  const id = typeof a === 'number' ? a : Number(a.id)
+  const b = typeof a !== 'number' && !!a.variant && a.variant.startsWith('b')
+  return `${SITE()}/${b ? 'b' : ''}?r=${makeResultToken(id)}`
 }
 
 const RU_NAME: Record<string, string> = { dopamine: 'Дофамин', acetylcholine: 'Ацетилхолин', gaba: 'ГАМК', serotonin: 'Серотонин' }
@@ -49,7 +53,8 @@ export async function fulfillPaidInvoice(i: {
     props: { amount, provider: i.provider ?? 'kpa', source: i.source, invoiceId: i.invoiceId }
   })
 
-  const link = resultLink(attempt.id)
+  const full = await getAttempt(attempt.id)
+  const link = resultLink(full ?? attempt.id)
   const phone = attempt.phone || i.phone || ''
 
   // Ссылка клиенту в WhatsApp — остаётся в чате навсегда
@@ -62,7 +67,6 @@ export async function fulfillPaidInvoice(i: {
     await setPaymentLinkSent(i.invoiceId, waSent)
   }
 
-  const full = await getAttempt(attempt.id)
   const trainer = attempt.trainer_id
     ? (await q<{ name: string; code: string }>('fulfill_trainer', 'SELECT name, code FROM trainers WHERE id = $1', [attempt.trainer_id]))[0]
     : null
@@ -76,6 +80,7 @@ export async function fulfillPaidInvoice(i: {
     full && blockedLabel(full) ? `⚠️ Заблокированность отделов: ${blockedLabel(full)} — клиенту предложена бесплатная пересдача` : '',
     trainer ? `🎓 Тренер: ${trainer.name} (${trainer.code})` : attempt.trainer_code ? `🎓 Код тренера: ${attempt.trainer_code} (неизвестен)` : '',
     full ? await sourceLine(full) : '',
+    variantLine(full),
     `🧾 Счёт #${i.invoiceId} · ${i.source}`,
     `🔗 ${link}`,
     adminAttemptLink(attempt.id),
@@ -104,7 +109,7 @@ export async function fulfillPaidInvoice(i: {
  */
 export async function fulfillRetake(a: AttemptRow, originalId: number): Promise<void> {
   await logEvent({ type: 'retake_granted', attemptId: a.id, sid: a.sid, utm: a.utm, trainerCode: a.trainer_code, props: { originalId } })
-  const link = resultLink(a.id)
+  const link = resultLink(a)
   let waSent = false
   let waFrom = ''
   if (a.phone) {
@@ -120,6 +125,7 @@ export async function fulfillRetake(a: AttemptRow, originalId: number): Promise<
     a.dominant ? `🧠 ${comboLabel(a.dominant, a.combo)}` : '',
     again ? `⚠️ Снова заблокированность отделов: ${again}` : '✅ Отделы не заблокированы',
     `↩️ Исходное прохождение #${originalId}`,
+    variantLine(a),
     `🔗 ${link}`,
     adminAttemptLink(a.id),
     whatsappConfigured() && a.phone
@@ -131,7 +137,7 @@ export async function fulfillRetake(a: AttemptRow, originalId: number): Promise<
 /** Оплата вне сайта: клиент прошёл тест по ссылке /?p=… — ссылка на результат в WhatsApp и уведомление в Telegram. */
 export async function fulfillPrepaid(a: AttemptRow): Promise<void> {
   await logEvent({ type: 'prepaid_done', attemptId: a.id, sid: a.sid, utm: a.utm, trainerCode: a.trainer_code })
-  const link = resultLink(a.id)
+  const link = resultLink(a)
   let waSent = false
   let waFrom = ''
   if (a.phone) {
@@ -176,7 +182,7 @@ export async function fulfillTrainerSelf(a: AttemptRow): Promise<void> {
  */
 export async function fulfillPromo(a: AttemptRow, p: PromoRow, via: 'checkout' | 'link'): Promise<void> {
   await logEvent({ type: 'promo_redeemed', attemptId: a.id, sid: a.sid, utm: a.utm, trainerCode: a.trainer_code, props: { code: p.code, via } })
-  const link = resultLink(a.id)
+  const link = resultLink(a)
   let waSent = false
   let waFrom = ''
   if (a.phone) {
@@ -193,6 +199,7 @@ export async function fulfillPromo(a: AttemptRow, p: PromoRow, via: 'checkout' |
     blocked ? `⚠️ Заблокированность отделов: ${blocked} — клиенту предложена бесплатная пересдача` : '',
     `🏷 <code>${tgEsc(p.code)}</code> · использовано ${p.used} из ${p.max_uses}${p.note ? ` · кому: ${tgEsc(p.note)}` : ''}`,
     via === 'link' ? '   по ссылке с промокодом' : '   ввели на странице оплаты',
+    variantLine(a),
     await sourceLine(a),
     `🔗 ${link}`,
     adminAttemptLink(a.id),

@@ -11,6 +11,8 @@ import { renderAttempts } from './pages/attempts'
 import { openAttemptDrawer } from './pages/attempt-drawer'
 import { renderPayments } from './pages/payments'
 import { renderPromos } from './pages/promos'
+import { renderAbPanel } from './pages/ab-panel'
+import { renderAbCompare } from './pages/ab-compare'
 import { renderTrainers, renderTrainer } from './pages/trainers'
 import { renderHealth } from './pages/health'
 import { renderChats } from './pages/chats'
@@ -53,6 +55,8 @@ async function render() {
       }
       case 'payments': if (!isAdmin()) return navigate('#/'); return await renderPayments(renderShell('payments', 'Оплаты', 'Счета Kaspi и их статусы'))
       case 'promos': if (!isAdmin()) return navigate('#/'); return await renderPromos(renderShell('promos', 'Промокоды', 'Бесплатный тест в подарок: коды и ссылки', false))
+      case 'ab': if (!isAdmin()) return navigate('#/'); return await renderAbPanel(renderShell('ab', 'Эксперимент · вариант Б', 'Новая воронка на braverman.kz/b: все метрики'))
+      case 'ab-compare': if (!isAdmin()) return navigate('#/'); return await renderAbCompare(renderShell('ab-compare', 'Эксперимент · сравнение А/Б', 'Обычный сайт против новой воронки на /b'))
       case 'chats': if (!isAdmin()) return navigate('#/'); return await renderChats(renderShell('chats', 'Чаты', 'WhatsApp-переписки с клиентами', false), route.phone)
       case 'trainers': if (!isAdmin()) return navigate('#/'); return await renderTrainers(renderShell('trainers', 'Тренеры', 'Партнёрские ссылки и их результаты'))
       case 'trainer': if (!isAdmin()) return navigate('#/'); return await renderTrainer(renderShell('trainer', 'Тренер', ''), route.id!)

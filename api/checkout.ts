@@ -6,6 +6,7 @@ import { verifyAttemptToken, makeResultToken } from './_access.js'
 import { kpaConfigured, createInvoice, isKaspiClient } from './_kpa.js'
 import { fulfillPaidInvoice, fulfillPromo } from './_fulfill.js'
 import { normCode, redeemPromo } from './_promo.js'
+import { variantLine } from './_ab.js'
 import { bodyOf, normalizePhone, tgNotify, adminAttemptLink, PRICE, sourceLine } from './_lib.js'
 
 type Req = { method?: string; headers: Record<string, string | string[] | undefined>; body?: unknown }
@@ -84,7 +85,7 @@ export default async function handler(req: Req, res: Res) {
     await tgNotify([
       '🧾 <b>Новый счёт — тест Бравермана</b>',
       `👤 ${attempt.name || '—'}`, `📱 <code>${phone}</code>`, `💵 ${amount} ₸${testAmount ? ' (тест)' : ''}`,
-      attempt.trainer_code ? `🎓 ${attempt.trainer_code}` : '', await sourceLine(attempt), adminAttemptLink(id)
+      attempt.trainer_code ? `🎓 ${attempt.trainer_code}` : '', await sourceLine(attempt), variantLine(attempt), adminAttemptLink(id)
     ])
     return res.status(200).json({ ok: true, invoiceId: inv.id })
   } catch (e) {

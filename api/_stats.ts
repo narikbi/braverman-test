@@ -54,7 +54,9 @@ export const FUNNEL_LABELS: Record<string, string> = {
 
 export async function funnelCounts(from: Date, to: Date, s: Scope): Promise<Record<string, number>> {
   const rows = await q<{ type: string; n: string }>('funnel', `
-    SELECT type, count(DISTINCT COALESCE(sid, 'a' || attempt_id::text, id::text)) AS n
+    SELECT type,
+      -- «Открыли результат» считаем по уникальным результатам, а не по сессиям: один клиент открывает его с разных устройств
+      count(DISTINCT CASE WHEN type = 'result_view' THEN 'a' || attempt_id::text ELSE COALESCE(sid, 'a' || attempt_id::text, id::text) END) AS n
     FROM events WHERE ts >= $1 AND ts < $2 AND type = ANY($3::text[]) AND ($4::text IS NULL OR trainer_code = $4)
     GROUP BY type`, [from, to, FUNNEL_TYPES, s.trainerCode])
   const out: Record<string, number> = {}
@@ -96,18 +98,22 @@ export type Kpi = Awaited<ReturnType<typeof kpi>>
 
 // ── источники (UTM и ссылки тренеров) ──
 export type SourceRow = { source: string; medium: string; campaign: string; content: string; views: number; started: number; finished: number; invoices: number; paid: number; revenue: number }
-export async function sourcesStats(from: Date, to: Date, trainerCode: string | null): Promise<SourceRow[]> {
+/** variant ('a' | 'b') — только события этого варианта A/B-эксперимента (см. api/_ab.ts); null — весь сайт. */
+export async function sourcesStats(from: Date, to: Date, trainerCode: string | null, variant: string | null = null): Promise<SourceRow[]> {
+  const ab = variant
+    ? { join: 'LEFT JOIN attempts a ON a.id = e.attempt_id', where: `AND split_part(COALESCE(a.variant, e.variant, 'a'), ':', 1) = $4`, params: [variant] }
+    : { join: '', where: '', params: [] }
   const rows = await q<Record<string, string>>('sources', `
-    SELECT COALESCE(utm->>'utm_source', CASE WHEN trainer_code IS NOT NULL THEN 'тренер:' || trainer_code ELSE '(прямые)' END) AS source,
-      COALESCE(utm->>'utm_medium', '') AS medium, COALESCE(utm->>'utm_campaign', '') AS campaign, COALESCE(utm->>'utm_content', '') AS content,
-      count(DISTINCT sid) FILTER (WHERE type = 'page_view')  AS views,
-      count(*) FILTER (WHERE type = 'quiz_start')            AS started,
-      count(*) FILTER (WHERE type = 'quiz_finish')           AS finished,
-      count(*) FILTER (WHERE type = 'invoice_created')       AS invoices,
-      count(*) FILTER (WHERE type = 'paid')                  AS paid,
-      COALESCE(sum((props->>'amount')::numeric) FILTER (WHERE type = 'paid' AND props->>'amount' ~ '^[0-9.]+$'), 0) AS revenue
-    FROM events WHERE ts >= $1 AND ts < $2 AND ($3::text IS NULL OR trainer_code = $3)
-    GROUP BY 1, 2, 3, 4 ORDER BY views DESC, paid DESC LIMIT 60`, [from, to, trainerCode])
+    SELECT COALESCE(e.utm->>'utm_source', CASE WHEN e.trainer_code IS NOT NULL THEN 'тренер:' || e.trainer_code ELSE '(прямые)' END) AS source,
+      COALESCE(e.utm->>'utm_medium', '') AS medium, COALESCE(e.utm->>'utm_campaign', '') AS campaign, COALESCE(e.utm->>'utm_content', '') AS content,
+      count(DISTINCT e.sid) FILTER (WHERE e.type = 'page_view')  AS views,
+      count(*) FILTER (WHERE e.type = 'quiz_start')              AS started,
+      count(*) FILTER (WHERE e.type = 'quiz_finish')             AS finished,
+      count(*) FILTER (WHERE e.type = 'invoice_created')         AS invoices,
+      count(*) FILTER (WHERE e.type = 'paid')                    AS paid,
+      COALESCE(sum((e.props->>'amount')::numeric) FILTER (WHERE e.type = 'paid' AND e.props->>'amount' ~ '^[0-9.]+$'), 0) AS revenue
+    FROM events e ${ab.join} WHERE e.ts >= $1 AND e.ts < $2 AND ($3::text IS NULL OR e.trainer_code = $3) ${ab.where}
+    GROUP BY 1, 2, 3, 4 ORDER BY views DESC, paid DESC LIMIT 60`, [from, to, trainerCode, ...ab.params])
   return rows.map(x => ({
     source: x.source, medium: x.medium, campaign: x.campaign, content: x.content,
     views: +x.views, started: +x.started, finished: +x.finished, invoices: +x.invoices, paid: +x.paid, revenue: +x.revenue

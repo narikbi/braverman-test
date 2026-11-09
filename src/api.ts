@@ -22,11 +22,12 @@ function post<T>(path: string, body: object): Promise<T> {
 export type Teaser = { dominant: NeuroKey; lowest: NeuroKey; combo: VideoKey }
 export type AttemptRes = { id: number; token: string; offline?: boolean; teaser?: Teaser; r?: string; promoError?: string }
 
-export function startAttempt(p: { name: string; lang: Lang; id?: number; token?: string }): Promise<AttemptRes> {
+// variant — метка A/B-эксперимента, её шлёт только страница варианта Б (/b)
+export function startAttempt(p: { name: string; lang: Lang; id?: number; token?: string; variant?: string }): Promise<AttemptRes> {
   return post('/api/attempt', { action: 'start', ...p, sid: getSid(), attr: getAttr() })
 }
 
-export function finishAttempt(p: { id: number; token: string; answers: number[]; name: string; lang: Lang; retake?: string; promo?: string }): Promise<AttemptRes> {
+export function finishAttempt(p: { id: number; token: string; answers: number[]; name: string; lang: Lang; retake?: string; promo?: string; variant?: string }): Promise<AttemptRes> {
   return post('/api/attempt', { action: 'finish', ...p, sid: getSid(), attr: getAttr() })
 }
 
@@ -59,6 +60,8 @@ export type ResultPayload = {
   blocked: [NeuroKey, NeuroKey][]
   retake: { allowed: boolean; newResult: string | null } | null
   isRetake: boolean
+  /** A/B-эксперимент: 'b…' — результат попытки варианта Б (открывается на /b) */
+  variant?: string | null
 }
 export async function getResult(r: string): Promise<ResultPayload> {
   const res = await fetch(`/api/result?r=${encodeURIComponent(r)}&sid=${getSid()}`)

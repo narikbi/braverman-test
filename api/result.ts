@@ -52,6 +52,7 @@ export default async function handler(req: Req, res: Res) {
     dominant: a.dominant,
     lowest: a.lowest,
     combo: a.combo,
-    paidAt: a.paid_at
+    paidAt: a.paid_at,
+    variant: a.variant ?? null // A/B-эксперимент: результат попытки варианта Б открывается на /b
   })
 }

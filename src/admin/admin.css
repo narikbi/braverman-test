@@ -288,3 +288,25 @@ textarea.input { min-height: 84px; resize: vertical; }
 /* кнопка-ссылка (Отключить / Включить промокод) */
 .link-btn { background: none; border: 0; padding: 0; font: inherit; font-size: 12.5px; color: var(--a-accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .link-btn:disabled { opacity: .5; cursor: default; }
+
+/* A/B-эксперимент: вкладки, шаги воронки варианта Б, таблица сравнения */
+.tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.tab { padding: 8px 14px; border-radius: 10px; border: 1px solid var(--a-border); background: var(--a-surface); color: var(--a-text-2); font-size: 13.5px; font-weight: 600; text-decoration: none; }
+.tab.active { background: var(--a-accent); border-color: var(--a-accent); color: #fff; }
+.funnel-steps .funnel-row { grid-template-columns: 210px 1fr 110px; }
+.funnel-steps .funnel-row.opt-step .lbl { font-weight: 500; color: var(--a-text-3); padding-left: 14px; }
+.funnel-steps .funnel-row.opt-step .bar i { background: #b9c3e6; }
+@media (max-width: 600px) { .funnel-steps .funnel-row { grid-template-columns: 150px 1fr 80px; } }
+.ab-table tr.sep td { background: var(--a-surface-2); font-size: 12px; font-weight: 700; color: var(--a-text-3); text-transform: uppercase; letter-spacing: .04em; }
+.ab-table tr.strong td { font-weight: 800; }
+.ab-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 0; font-size: 15px; }
+.chip-ok { background: var(--a-green-2); color: var(--a-green); }
+.ab-funnels { grid-template-columns: 1fr 1fr; }
+@media (max-width: 1100px) { .ab-funnels { grid-template-columns: 1fr; } }
+.ab-table .delta { font-size: 12.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.ab-table .delta.up { color: var(--a-green); background: var(--a-green-2); }
+.ab-table .delta.down { color: var(--a-red); background: var(--a-red-2); }
+.ab-table .delta.flat { color: var(--a-text-3); background: var(--a-surface-2); }
+/* восемь вкладок в нижнем меню на телефоне (с «A/B»): подписи чуть мельче, чтобы не обрезались */
+@media (max-width: 900px) { .bottom-nav:has(a:nth-child(8)) a { font-size: 10px; letter-spacing: -.02em; padding: 0; } }
+@media (max-width: 360px) { .bottom-nav:has(a:nth-child(8)) a { font-size: 9.5px; } }

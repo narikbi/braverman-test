@@ -15,6 +15,10 @@ const META_ID = import.meta.env.VITE_META_PIXEL_ID as string | undefined
 const TT_ID = import.meta.env.VITE_TIKTOK_PIXEL_ID as string | undefined
 
 let attemptRef: { id: number; token: string } | null = null
+
+// A/B-эксперимент: страница варианта Б (/b) помечает свои события; у обычного сайта метки нет
+let variant: string | null = null
+export function setVariant(v: string | null) { variant = v }
 /** Попытка, к которой привязывать события (сервер проверит токен). */
 export function setAttemptRef(ref: { id: number; token: string } | null) {
   attemptRef = ref && ref.id > 0 && ref.token ? ref : null
@@ -52,12 +56,13 @@ const SERVER_EVENTS: Record<string, string> = {
   InitiateCheckout: 'checkout_view',
   CheckoutSubmit: 'checkout_submit',
   VideoPlay: 'video_play',
+  TeaserPlay: 'teaser_play',
   RecoverView: 'recover_view'
 }
 
 function beacon(e: { type: string; step?: number; path?: string }) {
   try {
-    const body = JSON.stringify({ ...e, sid: getSid(), attr: getAttr(), attempt: attemptRef })
+    const body = JSON.stringify({ ...e, sid: getSid(), attr: getAttr(), attempt: attemptRef, ...(variant ? { variant } : {}) })
     const blob = new Blob([body], { type: 'application/json' })
     if (!navigator.sendBeacon?.('/api/track', blob)) {
       fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {})

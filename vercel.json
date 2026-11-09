@@ -10,6 +10,16 @@
   },
   "redirects": [
     {
+      "source": "/b/work",
+      "destination": "/b?h=work",
+      "permanent": false
+    },
+    {
+      "source": "/b/love",
+      "destination": "/b?h=love",
+      "permanent": false
+    },
+    {
       "source": "/podcast",
       "destination": "/?utm_source=youtube&utm_medium=podcast&utm_campaign=narikbi_live&utm_content=4UpMCaYnnLw",
       "permanent": false
@@ -59,7 +69,9 @@
     { "source": "/admin", "destination": "/admin.html" },
     { "source": "/admin/", "destination": "/admin.html" },
     { "source": "/privacy", "destination": "/privacy.html" },
-    { "source": "/privacy/", "destination": "/privacy.html" }
+    { "source": "/privacy/", "destination": "/privacy.html" },
+    { "source": "/b", "destination": "/b.html" },
+    { "source": "/b/", "destination": "/b.html" }
   ],
   "headers": [
     {

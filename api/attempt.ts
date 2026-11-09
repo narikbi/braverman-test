@@ -5,7 +5,8 @@ import { dbConfigured, createAttempt, finishAttempt, logEvent, ipHash, cleanAttr
 import { makeAttemptToken, verifyAttemptToken, verifyResultToken, makeResultToken, verifyPrepaidToken } from './_access.js'
 import { fulfillRetake, fulfillPrepaid, fulfillTrainerSelf, fulfillPromo } from './_fulfill.js'
 import { normCode, checkPromo, redeemPromo } from './_promo.js'
-import { bodyOf } from './_lib.js'
+import { bodyOf, normalizePhone } from './_lib.js'
+import { parseVariant, ensureAbSchema, setAttemptVariant, saveContact, publicStats } from './_ab.js'
 import { scoreAttempt, isValidAnswers, blockedPairs, MAX_FREE_RETAKES } from '../shared/scoring.js'
 
 const PREPAID_KINDS = ['prepaid', 'trainer']
@@ -30,7 +31,28 @@ export default async function handler(req: Req, res: Res) {
 
   if (!dbConfigured()) return res.status(200).json({ ok: true, id: 0, token: '', offline: true })
 
+  // A/B-эксперимент: метку варианта присылает только страница /b
+  const variant = parseVariant(b.variant)
+  if (variant) await ensureAbSchema().catch(() => {})
+
   try {
+    // Вариант Б: счётчик «N человек уже знают свой тип» на первом экране
+    if (action === 'public-stats') return res.status(200).json({ ok: true, ...(await publicStats()) })
+
+    // Вариант Б: номер WhatsApp с согласием (100-й вопрос) и имя (150-й) — сохраняем, сообщений не шлём
+    if (action === 'b-save') {
+      const id = Number(b.id) || 0
+      if (!id || !verifyAttemptToken(id, String(b.token || ''))) return res.status(403).json({ ok: false, error: 'token' })
+      const phone = b.phone ? normalizePhone(b.phone) : null
+      if (b.phone && !phone) return res.status(400).json({ ok: false, error: 'phone' })
+      if (phone && b.consent !== true) return res.status(400).json({ ok: false, error: 'consent' })
+      await ensureAbSchema().catch(() => {})
+      await saveContact(id, { phone, consent: true, name: meta.name })
+      if (phone) await logEvent({ type: 'wa_optin', attemptId: id, ...common })
+      if (meta.name) await logEvent({ type: 'name_given', attemptId: id, ...common })
+      return res.status(200).json({ ok: true })
+    }
+
     // Оплата вне сайта: клиент открыл ссылку /?p=… — отдаём его попытку (или готовый результат)
     if (action === 'prepaid') {
       const pid = verifyPrepaidToken(typeof b.p === 'string' ? b.p : '')
@@ -60,6 +82,7 @@ export default async function handler(req: Req, res: Res) {
         return res.status(200).json({ ok: true, id: existing, token: makeAttemptToken(existing) })
       }
       const { id } = await createAttempt(meta)
+      if (variant) await setAttemptVariant(id, variant)
       await logEvent({ type: 'quiz_start', attemptId: id, ...common })
       return res.status(200).json({ ok: true, id, token: makeAttemptToken(id) })
     }
@@ -70,6 +93,7 @@ export default async function handler(req: Req, res: Res) {
       if (!id || !verifyAttemptToken(id, String(b.token || ''))) {
         // старт не успел (или его не было) — создаём попытку сейчас
         id = (await createAttempt(meta)).id
+        if (variant) await setAttemptVariant(id, variant)
         await logEvent({ type: 'quiz_start', attemptId: id, ...common, props: { late: true } })
       }
       // уже оплаченный и пройденный тест не перезаписываем (ссылку /?p=… нельзя использовать повторно)

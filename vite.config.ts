@@ -15,7 +15,18 @@ function apiDevPlugin(): Plugin {
           req.url = req.url.replace(/^\/admin\/?/, '/admin.html')
         } else if (req.url && /^\/privacy\/?(\?|$)/.test(req.url)) {
           req.url = req.url.replace(/^\/privacy\/?/, '/privacy.html')
+        } else if (req.url && /^\/b\/?(\?|$)/.test(req.url)) {
+          // вариант Б (A/B-эксперимент): /b → b.html
+          req.url = req.url.replace(/^\/b\/?/, '/b.html')
         } else if (req.url) {
+          // нарезки варианта Б: /b/work, /b/love → /b?h=…
+          const hook = /^\/b\/(work|love)\/?(\?.*)?$/.exec(req.url)
+          if (hook) {
+            res.statusCode = 302
+            res.setHeader('Location', `/b?h=${hook[1]}${hook[2] ? '&' + hook[2].slice(1) : ''}`)
+            res.end()
+            return
+          }
           const promo = /^\/promo\/([A-Za-z0-9-]{3,32})\/?$/.exec(req.url)
           if (promo) {
             res.statusCode = 302
@@ -97,7 +108,8 @@ export default defineConfig(({ mode }) => {
         input: {
           main: resolve(__dirname, 'index.html'),
           admin: resolve(__dirname, 'admin.html'),
-          privacy: resolve(__dirname, 'privacy.html')
+          privacy: resolve(__dirname, 'privacy.html'),
+          b: resolve(__dirname, 'b.html') // вариант Б (A/B-эксперимент)
         }
       }
     },

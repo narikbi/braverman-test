@@ -1,27 +1,19 @@
-// Видео-разбор на экране результата: свой плеер без брендинга.
-// Источник — HLS с несколькими качествами (video.braverman.kz, см. content/videos.ts): плеер сам выбирает
-// качество по скорости сети. Safari (iPhone/iPad/Mac) играет HLS сам, остальным подгружаем hls.js.
-// Если HLS не загрузился — запасной mp4 одним файлом; если и он не пошёл — текст с кнопкой «Обновить».
-import { VIDEO_BASE, hlsUrl, posterUrl, mp4Url } from './content/videos'
+// Видео-разбор на экране результата: свой плеер без брендинга (заголовок, выбор языка, сообщение об ошибке).
+// Сам источник (HLS с выбором качества, запасной mp4) подключает video-source.ts.
+import { VIDEO_BASE } from './content/videos'
 import { LANGS, type Lang } from './content'
 import { T } from './i18n'
 import { $ } from './dom'
 import { track } from './analytics'
+import { attachVideoSource, type VideoHandle } from './video-source'
 import type { VideoKey } from '../shared/scoring'
-import type Hls from 'hls.js'
 
 let videoKey: VideoKey | null = null
 let videoLang: Lang = 'ru'
 let playTracked = false
-let hls: Hls | null = null
-let gen = 0 // номер текущей загрузки: ответы старых (смена языка/экрана) игнорируем
+let handle: VideoHandle | null = null
 
 const player = () => $<HTMLVideoElement>('videoPlayer')
-
-function destroyHls() {
-  hls?.destroy()
-  hls = null
-}
 
 function showError(show: boolean) {
   const el = $('videoError')
@@ -30,54 +22,12 @@ function showError(show: boolean) {
   $('videoRetry')?.addEventListener('click', () => { if (videoKey) setSrc(videoKey, videoLang) })
 }
 
-/** Запасной вариант: обычный mp4 (один файл, без адаптации качества). */
-function playMp4(key: VideoKey, code: Lang, my: number) {
-  const v = player()
-  destroyHls()
-  v.onerror = () => { if (my === gen) showError(true) }
-  v.src = mp4Url(key, code)
-}
-
-async function setSrc(key: VideoKey, code: Lang) {
-  const my = ++gen
+function setSrc(key: VideoKey, code: Lang) {
   const v = player()
   showError(false)
-  destroyHls()
+  handle?.destroy()
   v.hidden = false
-  v.poster = posterUrl(key, code)
-  v.onerror = null
-  v.removeAttribute('src')
-  const src = hlsUrl(key, code)
-
-  // Safari умеет HLS сам — отдаём манифест напрямую
-  if (v.canPlayType('application/vnd.apple.mpegurl')) {
-    v.onerror = () => { if (my === gen) playMp4(key, code, my) }
-    v.src = src
-    return
-  }
-  try {
-    const { default: HlsCtor } = await import('hls.js')
-    if (my !== gen) return
-    if (!HlsCtor.isSupported()) return playMp4(key, code, my)
-    const h = new HlsCtor({ maxBufferLength: 30, backBufferLength: 30, startLevel: -1, capLevelToPlayerSize: true })
-    hls = h
-    let netRetries = 0
-    let mediaRetries = 0
-    h.on(HlsCtor.Events.ERROR, (_e, data) => {
-      if (!data.fatal || my !== gen) return
-      // сеть моргнула — пробуем ещё пару раз, потом — mp4
-      if (data.type === HlsCtor.ErrorTypes.NETWORK_ERROR && netRetries++ < 2) {
-        setTimeout(() => { if (my === gen) h.startLoad() }, 1500)
-        return
-      }
-      if (data.type === HlsCtor.ErrorTypes.MEDIA_ERROR && mediaRetries++ < 2) { h.recoverMediaError(); return }
-      playMp4(key, code, my)
-    })
-    h.loadSource(src)
-    h.attachMedia(v)
-  } catch {
-    if (my === gen) playMp4(key, code, my) // hls.js не загрузился
-  }
+  handle = attachVideoSource(v, key, code, () => showError(true))
 }
 
 function renderSwitch() {
@@ -119,10 +69,10 @@ export function relabelVideo() {
 }
 
 export function stopVideo() {
-  gen++
   const v = player()
   v.pause()
-  destroyHls()
+  handle?.destroy()
+  handle = null
   v.removeAttribute('src')
   v.removeAttribute('poster')
   v.hidden = true

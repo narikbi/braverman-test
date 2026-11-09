@@ -13,6 +13,7 @@ const NAV_ADMIN = [
   { hash: '#/attempts', ic: '👥', label: 'Прохождения', short: 'Клиенты', match: 'attempts' },
   { hash: '#/payments', ic: '💳', label: 'Оплаты', match: 'payments' },
   { hash: '#/promos', ic: '🎁', label: 'Промокоды', short: 'Промо', match: 'promos' },
+  { hash: '#/ab', ic: '🧪', label: 'Эксперимент', short: 'A/B', match: 'ab' }, // A/B-эксперимент: панель варианта Б и сравнение
   { hash: '#/chats', ic: '💬', label: 'Чаты', match: 'chats' },
   { hash: '#/trainers', ic: '🎓', label: 'Тренеры', match: 'trainers' },
   { hash: '#/health', ic: '🩺', label: 'Система', match: 'health' }
@@ -26,7 +27,7 @@ const navTrainer = () => [
 export function renderShell(active: string, title: string, sub = '', withRange = true): HTMLElement {
   const app = document.getElementById('app')!
   const nav = isAdmin() ? NAV_ADMIN : navTrainer()
-  const isActive = (m: string) => active === m || (m === 'attempts' && active === 'attempt') || (m === 'trainers' && active === 'trainer')
+  const isActive = (m: string) => active === m || (m === 'attempts' && active === 'attempt') || (m === 'trainers' && active === 'trainer') || (m === 'ab' && active === 'ab-compare')
   const brand = isAdmin() ? 'Braverman' : `Braverman · ${esc(META.trainer?.name || L('тренер', 'тренер'))}`
   app.innerHTML = `
     <div class="shell">

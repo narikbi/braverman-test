@@ -121,6 +121,10 @@ export type AttemptRow = {
   retake_of: number | null
   self_trainer_id: number | null
   promo_code?: string | null
+  // A/B-эксперимент (api/_ab.ts): вариант и номер WhatsApp с 100-го вопроса
+  variant?: string | null
+  wa_phone?: string | null
+  wa_consent_at?: string | null
 }
 
 export type AttemptMeta = { sid?: string | null; name?: string; lang?: 'ru' | 'kk'; attr?: Attribution }
