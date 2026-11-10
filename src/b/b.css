@@ -82,6 +82,11 @@ label.f { display: block; font-size: 14px; font-weight: 600; margin: 18px 0 6px;
   display: grid; place-items: center; font-family: var(--head); font-weight: 800; font-size: 40px; border: 4px solid var(--bg); }
 .ask { font-family: var(--head); font-weight: 800; font-size: 18px; margin-top: 12px; }
 .author-row { display: flex; align-items: center; gap: 12px; margin-top: 18px; font-size: 14px; line-height: 1.3; }
+/* на первом экране автор стоит сразу под шапкой: блок компактнее, чтобы четыре типа остались над кнопкой */
+.top + .author-row { margin-top: 10px; }
+.top + .author-row .author-avatar { width: 48px; height: 48px; }
+.author-row + .title { margin-top: 12px; }
+.author-row ~ .tiles { margin-top: 18px; }
 .author-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 3px solid var(--surface); box-shadow: var(--shadow-sm); background: var(--soft); }
 .author-name { font-size: 15px; font-weight: 600; }
 .author-name .verified { width: 17px; height: 17px; margin-left: 4px; vertical-align: -3px; }

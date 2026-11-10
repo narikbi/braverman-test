@@ -1,4 +1,4 @@
-// Первый экран варианта Б: заголовок под нарезку, четыре типа, что человек получит, цена сразу, закреплённая кнопка.
+// Первый экран варианта Б: автор на самом верху, заголовок под нарезку, четыре типа, что человек получит, цена сразу, закреплённая кнопка.
 // Имени здесь не спрашиваем — тест начинается одним нажатием.
 import { NEURO_ORDER } from '../../../shared/scoring'
 import { esc } from '../../dom'
@@ -39,11 +39,11 @@ function render() {
   mount(`
     <div class="card">
       <div class="top"><span class="brand">${esc(t.ui.badge)}</span>${langSwitch()}</div>
+      ${authorRow('author.webp', t.ui.authorRole)}
       <h1 class="title">${esc(b.hooks[state.hook])}</h1>
       <p class="lead">${esc(b.lead)}</p>
       <div class="tiles">${NEURO_ORDER.map(k => `<div class="tile" style="background:${COLORS[k]};color:${onColor(k)}">${esc(t.neuro[k].title)}</div>`).join('')}<div class="q" aria-hidden="true">?</div></div>
       <p class="ask">${esc(b.typesH)}</p>
-      ${authorRow('author.webp', t.ui.authorRole)}
       <div class="facts"><div><b>≈20</b>${esc(t.ui.factMinutes)}</div><div><b>200</b>${esc(t.ui.factQuestions)}</div><div><b>4</b>${esc(t.ui.factNeuro)}</div></div>
       <h2>${esc(b.valueH)}</h2>
       <ul class="value">${b.value.map((v, i) => `<li>${esc(v)}<span class="${i ? '' : 'fr'}">${esc(i ? b.tagPaid : b.tagFree)}</span></li>`).join('')}</ul>
