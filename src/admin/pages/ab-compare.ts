@@ -47,8 +47,13 @@ export async function renderAbCompare(page: HTMLElement) {
   if (!d) return
   const { a, b } = d
 
-  const count = (label: string, k: keyof AbSide, money = false) =>
-    `<tr><td>${esc(label)}</td><td class="num">${money ? fmtMoney(a[k]) : fmtNum(a[k])}</td><td class="num">${money ? fmtMoney(b[k]) : fmtNum(b[k])}</td><td class="num muted">—</td></tr>`
+  // Шаг воронки: число и рядом доля от открывших сайт (от исходного трафика), в «Разнице» — на сколько п.п. доля Б выше или ниже.
+  const NO_PCT = '<span class="ab-pct"></span>'
+  const step = (s: AbSide, k: keyof AbSide) => `${fmtNum(s[k])}<span class="ab-pct">${share(s[k], s.visits)}</span>`
+  const count = (label: string, k: keyof AbSide) =>
+    `<tr><td>${esc(label)}</td><td class="num">${step(a, k)}</td><td class="num">${step(b, k)}</td><td class="num">${k === 'visits' ? '<span class="muted">—</span>' : ppDelta(a[k], a.visits, b[k], b.visits)}</td></tr>`
+  const money = (label: string, va: string, vb: string) =>
+    `<tr><td>${esc(label)}</td><td class="num">${va}${NO_PCT}</td><td class="num">${vb}${NO_PCT}</td><td class="num muted">—</td></tr>`
   const rate = (label: string, x: keyof AbSide, of: keyof AbSide, strong = false) =>
     `<tr${strong ? ' class="strong"' : ''}><td>${esc(label)}</td><td class="num">${share(a[x], a[of], strong ? 2 : 1)}</td><td class="num">${share(b[x], b[of], strong ? 2 : 1)}</td><td class="num">${ppDelta(a[x], a[of], b[x], b[of])}</td></tr>`
   const per100 = (s: AbSide) => (s.visits ? fmtMoney((s.revenue / s.visits) * 100) : '—')
@@ -65,7 +70,7 @@ export async function renderAbCompare(page: HTMLElement) {
       <div class="muted" style="font-size:12.5px;margin-top:10px">Вывод о значимости появляется, когда в каждом варианте не меньше 100 человек и есть хотя бы 10 оплат на двоих. Пока данных мало, разница может быть случайной.</div>
     </div></div></div>
 
-    <div class="section"><div class="card"><div class="card-head"><h2>Метрики</h2><span class="hint">за выбранный период</span></div><div class="card-body"><div class="table-wrap"><table class="tbl ab-table">
+    <div class="section"><div class="card"><div class="card-head"><h2>Метрики</h2><span class="hint">рядом с числом — доля от открывших сайт</span></div><div class="card-body"><div class="table-wrap"><table class="tbl ab-table">
       <thead><tr><th>Метрика</th><th class="num">Вариант А</th><th class="num">Вариант Б</th><th class="num">Разница</th></tr></thead>
       <tbody>
         ${count('Открыли сайт', 'visits')}
@@ -77,8 +82,8 @@ export async function renderAbCompare(page: HTMLElement) {
         ${count('Экран оплаты (в Б — свой тип)', 'checkouts')}
         ${count('Счёт выставлен', 'invoices')}
         ${count('Оплатили', 'paid')}
-        ${count('Выручка', 'revenue', true)}
-        <tr><td>Выручка на 100 посетителей</td><td class="num">${per100(a)}</td><td class="num">${per100(b)}</td><td class="num muted">—</td></tr>
+        ${money('Выручка', fmtMoney(a.revenue), fmtMoney(b.revenue))}
+        ${money('Выручка на 100 посетителей', per100(a), per100(b))}
         <tr class="sep"><td colspan="4">Конверсии по шагам</td></tr>
         ${rate('Открыли → начали тест', 'started', 'visits')}
         ${rate('Начали → дошли до 100-го', 'q100', 'started')}
