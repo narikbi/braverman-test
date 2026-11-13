@@ -3,7 +3,7 @@
 // Подключение: админка → Система → «Подключить команды бота» (setWebhook + setMyCommands).
 import crypto from 'node:crypto'
 import { tgCall, SITE, sourceParts, formatSource, utmParts, youtubeIdOf, youtubeTitle, isAdMedium } from './_lib.js'
-import { createPromo, getPromo, normCode, promoLink, promoStatus, timesRu } from './_promo.js'
+import { createPromo, getPromo, activePromos, normCode, promoLink, promoStatus, timesRu } from './_promo.js'
 import { logEvent } from './_db.js'
 import { abBrief } from './_ab.js'
 import { rangeFor, kpi, funnelCounts, sourcesStats, trainersStats, recentPaid, ALL, FUNNEL_TYPES, FUNNEL_LABELS, type Kpi } from './_stats.js'
@@ -18,6 +18,7 @@ export function tgWebhookSecret(): string {
 export const tgWebhookUrl = () => `${SITE()}/api/tg-webhook`
 
 export const BOT_COMMANDS = [
+  { command: 'help', description: 'Инструкция: что умеет бот и как им пользоваться' },
   { command: 'report', description: 'Сводка: сегодня, вчера, 7 и 30 дней, всё время' },
   { command: 'today', description: 'Отчёт за сегодня' },
   { command: 'yesterday', description: 'Отчёт за вчера' },
@@ -26,7 +27,8 @@ export const BOT_COMMANDS = [
   { command: 'all', description: 'Отчёт за всё время' },
   { command: 'payments', description: 'Последние оплаты' },
   { command: 'trainers', description: 'Тренеры за 30 дней' },
-  { command: 'promo', description: 'Промокод на бесплатный тест: /promo [свой код] [сколько раз] [для кого]' }
+  { command: 'promo', description: 'Промокод на бесплатный тест: /promo [свой код] [сколько раз] [для кого]' },
+  { command: 'promos', description: 'Действующие промокоды: сколько раз использованы' }
 ]
 
 type TgResult<T> = { ok: boolean; result?: T; description?: string }
@@ -83,7 +85,9 @@ export const KEYBOARD = {
   inline_keyboard: [
     [{ text: 'Сегодня', callback_data: 'r:today' }, { text: 'Вчера', callback_data: 'r:yesterday' }],
     [{ text: '7 дней', callback_data: 'r:7d' }, { text: '30 дней', callback_data: 'r:30d' }, { text: 'Всё время', callback_data: 'r:all' }],
-    [{ text: 'Последние оплаты', callback_data: 'pay' }, { text: 'Тренеры', callback_data: 'tr' }]
+    [{ text: 'Последние оплаты', callback_data: 'pay' }, { text: 'Тренеры', callback_data: 'tr' }],
+    // H: — открыть страницу инструкции новым сообщением (h: — перелистнуть уже открытую, см. api/_tghelp.ts)
+    [{ text: '🎁 Промокоды', callback_data: 'H:promo' }, { text: '❓ Инструкция', callback_data: 'H:main' }]
   ]
 }
 
@@ -209,10 +213,19 @@ export async function trainersReport(): Promise<string> {
   return out.join('\n')
 }
 
-export const HELP_TEXT = [
-  '🤖 <b>Команды</b>',
-  ...BOT_COMMANDS.map(c => `/${c.command} — ${c.description}`)
-].join('\n')
+/** /promos — действующие промокоды: сколько раз использован каждый и ссылка, которую отправляют клиенту */
+export async function promosReport(): Promise<string> {
+  const { items, total } = await activePromos(15)
+  if (!items.length) return '🎁 Действующих промокодов нет. Новый код: кнопка «Код на 1 человека» в разделе «Промокоды» или команда <code>/promo</code>.'
+  const out = [`🎁 <b>Действующие промокоды</b> <i>(${num(total)})</i>`, '']
+  for (const p of items) {
+    out.push(`<code>${esc(p.code)}</code> — использован ${num(p.used)} из ${num(p.max_uses)}${p.note ? ` · ${esc(p.note)}` : ''}`)
+    out.push(`<code>${esc(promoLink(p.code))}</code>`, '')
+  }
+  if (total > items.length) out.push(`Показаны ${items.length} из ${num(total)}: те, которыми пользовались или которые создали последними.`)
+  out.push('Нажмите на код или ссылку — они скопируются.', `🛠 ${SITE()}/admin#/promos`)
+  return out.join('\n')
+}
 
 /** Что просят в /promo: свой код (или null — сгенерировать), сколько раз, для кого. */
 export type PromoArgs = { code: string | null; uses: number; note: string }

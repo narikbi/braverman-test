@@ -102,6 +102,16 @@ export async function listPromos(): Promise<PromoWithUses[]> {
   })
 }
 
+/** Действующие коды (включены и не израсходованы): сначала те, которыми пользовались или которые создали недавно. total — сколько их всего. */
+export async function activePromos(limit = 15): Promise<{ items: PromoRow[]; total: number }> {
+  await ensurePromoSchema()
+  const rows = await q<Record<string, unknown>>('promo_active', `
+    SELECT p.*, count(*) OVER () AS total FROM promo_codes p
+    WHERE p.active AND p.used < p.max_uses
+    ORDER BY COALESCE(p.last_used_at, p.created_at) DESC LIMIT $1`, [limit])
+  return { items: rows.map(toRow), total: Number(rows[0]?.total ?? 0) }
+}
+
 export async function togglePromo(id: number, active: boolean): Promise<PromoRow | null> {
   await ensurePromoSchema()
   const rows = await qx<Record<string, unknown>>('promo_toggle', `UPDATE promo_codes SET active = $2 WHERE id = $1 RETURNING *`, [id, active])
