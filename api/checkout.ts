@@ -1,11 +1,11 @@
 // POST /api/checkout — номер телефона → Kaspi-счёт на номер (через шлюз braverman-kaspi).
 // {action:'promo', code} — вместо оплаты промокод: номер нужен (ссылка на результат уходит в WhatsApp).
 // Результат открывается ТОЛЬКО после оплаты (вебхук шлюза / поллинг invoice-status).
-import { dbConfigured, getAttempt, setAttemptInvoice, findPendingInvoice, createPayment, logEvent, ipHash, countRecent } from './_db.js'
+import { dbConfigured, getAttempt, setAttemptInvoice, findPendingInvoice, createPayment, logEvent, ipHash } from './_db.js'
 import { verifyAttemptToken, makeResultToken } from './_access.js'
 import { kpaConfigured, createInvoice, isKaspiClient } from './_kpa.js'
 import { fulfillPaidInvoice, fulfillPromo } from './_fulfill.js'
-import { normCode, redeemPromo } from './_promo.js'
+import { normCode, redeemPromo, promoGuesses, PROMO_GUESS_LIMIT } from './_promo.js'
 import { variantLine } from './_ab.js'
 import { bodyOf, normalizePhone, tgNotify, adminAttemptLink, PRICE, sourceLine } from './_lib.js'
 
@@ -35,10 +35,10 @@ export default async function handler(req: Req, res: Res) {
   const phone = normalizePhone(b.phone)
   if (!phone) return res.status(400).json({ ok: false, error: 'phone' })
 
-  // Промокод вместо оплаты. Перебор кодов режем: больше 10 неверных за 15 минут с одного IP — пауза.
+  // Промокод вместо оплаты. Перебор кодов режем: больше 40 несуществующих кодов за 15 минут с одного IP — пауза.
   if (b.action === 'promo') {
     const ip = ipHash(req.headers)
-    if (await countRecent('promo_failed', 'ip_hash', ip, 15) >= 10) return res.status(429).json({ ok: false, error: 'too_many' })
+    if (await promoGuesses(ip) >= PROMO_GUESS_LIMIT) return res.status(429).json({ ok: false, error: 'too_many' })
     const code = normCode(b.code)
     const red = code ? await redeemPromo(id, code, phone) : { ok: false as const, reason: 'not_found' as const }
     if (!red.ok) {

@@ -116,6 +116,19 @@ export async function getPromo(code: string): Promise<PromoRow | null> {
 
 export type PromoFail = 'not_found' | 'inactive' | 'used_up' | 'already_paid'
 
+/**
+ * Защита от подбора кодов: сколько несуществующих кодов ввели с этого IP за 15 минут.
+ * Считаем только неверные коды. «Код закончился» и «отключён» подбором не являются, а на мероприятии
+ * десятки людей сидят на одном Wi-Fi — общий счётчик всех неудач запер бы весь зал.
+ */
+export const PROMO_GUESS_LIMIT = 40
+export async function promoGuesses(ip: string): Promise<number> {
+  const rows = await q<{ n: string }>('promo_guesses', `
+    SELECT count(*) AS n FROM events
+    WHERE type = 'promo_failed' AND ip_hash = $1 AND props->>'reason' = 'not_found' AND ts > now() - interval '15 minutes'`, [ip])
+  return Number(rows[0]?.n ?? 0)
+}
+
 /** Можно ли сейчас погасить код (для пометки «тест в подарок» на странице по ссылке). */
 export async function checkPromo(code: string): Promise<{ valid: true; promo: PromoRow } | { valid: false; reason: PromoFail }> {
   const p = await getPromo(code)

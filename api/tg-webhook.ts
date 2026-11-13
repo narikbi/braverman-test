@@ -18,7 +18,7 @@ const safeEqual = (a: string, b: string) => {
   return x.length === y.length && x.length > 0 && crypto.timingSafeEqual(x, y)
 }
 
-// args — текст после команды («/promo 5 Тренинг» → «5 Тренинг»); отчётам он не нужен
+// args — текст после команды («/promo amway1411 150 Мастер-класс» → «amway1411 150 Мастер-класс»); отчётам он не нужен
 const COMMANDS: Record<string, (args: string) => Promise<string>> = {
   report: summaryReport,
   start: summaryReport,

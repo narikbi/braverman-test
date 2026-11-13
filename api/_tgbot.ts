@@ -3,7 +3,7 @@
 // Подключение: админка → Система → «Подключить команды бота» (setWebhook + setMyCommands).
 import crypto from 'node:crypto'
 import { tgCall, SITE, sourceParts, formatSource, utmParts, youtubeIdOf, youtubeTitle, isAdMedium } from './_lib.js'
-import { createPromo, promoLink, timesRu } from './_promo.js'
+import { createPromo, getPromo, normCode, promoLink, promoStatus, timesRu } from './_promo.js'
 import { logEvent } from './_db.js'
 import { abBrief } from './_ab.js'
 import { rangeFor, kpi, funnelCounts, sourcesStats, trainersStats, recentPaid, ALL, FUNNEL_TYPES, FUNNEL_LABELS, type Kpi } from './_stats.js'
@@ -26,7 +26,7 @@ export const BOT_COMMANDS = [
   { command: 'all', description: 'Отчёт за всё время' },
   { command: 'payments', description: 'Последние оплаты' },
   { command: 'trainers', description: 'Тренеры за 30 дней' },
-  { command: 'promo', description: 'Промокод на бесплатный тест: /promo [сколько раз] [кому]' }
+  { command: 'promo', description: 'Промокод на бесплатный тест: /promo [свой код] [сколько раз] [для кого]' }
 ]
 
 type TgResult<T> = { ok: boolean; result?: T; description?: string }
@@ -214,26 +214,59 @@ export const HELP_TEXT = [
   ...BOT_COMMANDS.map(c => `/${c.command} — ${c.description}`)
 ].join('\n')
 
+/** Что просят в /promo: свой код (или null — сгенерировать), сколько раз, для кого. */
+export type PromoArgs = { code: string | null; uses: number; note: string }
+
 /**
- * /promo [сколько раз] [кому] — промокод на бесплатный тест: «/promo», «/promo 5», «/promo Айгерім», «/promo 3 Тренинг 21 окт».
+ * Разбор текста после /promo.
+ * Свой код — первым словом, сразу за ним число: «amway1411 150 Мастер-класс AmWay». Код — латиница, цифры и дефис, регистр не важен.
+ * Без своего кода — как раньше: «», «5», «Айгерім», «3 Тренинг 21 окт» (код сгенерируем).
+ */
+export function parsePromoArgs(args: string): PromoArgs {
+  const s = args.trim()
+  const named = s.match(/^(\S+)\s+(\d+)(?:\s+([\s\S]*))?$/)
+  const own = named && !/^\d+$/.test(named[1]) ? normCode(named[1]) : null
+  if (named && own) return { code: own, uses: Number(named[2]), note: (named[3] || '').trim().slice(0, 200) }
+  const m = s.match(/^(\d+)?\s*([\s\S]*)$/)
+  return { code: null, uses: m?.[1] ? Number(m[1]) : 1, note: (m?.[2] || '').trim().slice(0, 200) }
+}
+
+const PROMO_FORMAT = 'Свой код: <code>/promo amway1411 150 Мастер-класс</code> — сначала код латиницей, потом сколько раз.'
+
+/**
+ * /promo — промокод на бесплатный тест. Со своим кодом: «/promo amway1411 150 Мастер-класс AmWay».
+ * Со сгенерированным: «/promo», «/promo 5», «/promo Айгерім», «/promo 3 Тренинг 21 окт».
  * Ответ — код и ссылка в <code> (в Telegram нажатие копирует).
  */
 export async function promoCommand(args = ''): Promise<string> {
-  const m = args.trim().match(/^(\d{1,4})?\s*([\s\S]*)$/)
-  const uses = m?.[1] ? Number(m[1]) : 1
-  const note = (m?.[2] || '').trim().slice(0, 200)
-  if (uses < 1 || uses > 1000) return 'Сколько раз можно использовать код — от 1 до 1000. Пример: <code>/promo 5 Тренинг</code>'
-  const p = await createPromo({ note, uses, by: 'bot' })
-  if (p === 'code_taken') return 'Не получилось создать код — попробуйте ещё раз.'
+  const { code, uses, note } = parsePromoArgs(args)
+  if (uses < 1 || uses > 1000) return `Сколько раз можно использовать код — от 1 до 1000. Пример: <code>/promo 5 Тренинг</code>\n${PROMO_FORMAT}`
+  const p = await createPromo({ note, uses, code, by: 'bot' })
+  if (p === 'code_taken') {
+    const old = code ? await getPromo(code) : null
+    if (!old) return 'Не получилось создать код — попробуйте ещё раз.'
+    const st = { active: 'действует', used: 'использован полностью', off: 'отключён' }[promoStatus(old)]
+    return [
+      `Код <code>${esc(old.code)}</code> уже есть — новый с таким именем не создан.`,
+      `Использован ${num(old.used)} из ${num(old.max_uses)} · ${st}${old.note ? ` · для кого: ${esc(old.note)}` : ''}`,
+      `Ссылка: <code>${esc(promoLink(old.code))}</code>`,
+      '',
+      'Придумайте другое имя или пользуйтесь этим кодом.',
+      `🛠 ${SITE()}/admin#/promos`
+    ].join('\n')
+  }
   await logEvent({ type: 'promo_created', props: { code: p.code, uses: p.max_uses, by: 'bot' } })
+  // Слово латиницей без числа за ним осталось подписью — подсказываем, как задать свой код
+  const hint = !code && /^[A-Za-z0-9-]{3,32}(\s|$)/.test(note) && /[A-Za-z]/.test(note.split(/\s/)[0])
   return [
     '🎁 <b>Промокод на бесплатный тест</b>',
     '',
     `Код: <code>${esc(p.code)}</code>`,
     `Ссылка: <code>${esc(promoLink(p.code))}</code>`,
-    `Можно использовать: ${timesRu(p.max_uses)}${note ? ` · кому: ${esc(note)}` : ''}`,
+    `Можно использовать: ${timesRu(p.max_uses)}${note ? ` · для кого: ${esc(note)}` : ''}`,
     '',
-    '<i>Код вводят на странице оплаты. По ссылке тест проходят без оплаты — результат откроется сразу.</i>',
+    '<i>Код вводят на странице оплаты, большими или маленькими буквами. По ссылке тест проходят без оплаты — результат откроется сразу.</i>',
+    ...(hint ? ['', PROMO_FORMAT] : []),
     `🛠 ${SITE()}/admin#/promos`
   ].join('\n')
 }

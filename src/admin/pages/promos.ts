@@ -38,7 +38,7 @@ const copy = (text: string, msg: string) => navigator.clipboard.writeText(text).
 export async function renderPromos(page: HTMLElement) {
   page.innerHTML = `<div class="card"><div class="card-body">
     <div class="toolbar">
-      <span class="muted" style="font-size:13px">Код вводят на странице оплаты, а по ссылке тест проходят без оплаты. Создать код можно и в Telegram-боте: <code>/promo</code></span>
+      <span class="muted" style="font-size:13px">Код вводят на странице оплаты, а по ссылке тест проходят без оплаты. Создать код можно и в Telegram-боте: <code>/promo</code>, со своим именем — <code>/promo amway1411 150 Мастер-класс</code></span>
       <button class="btn btn-primary" id="add">＋ Промокод</button>
     </div>
     <div id="tbl"><div class="skel" style="height:120px"></div></div></div></div>`
