@@ -35,6 +35,51 @@
       "permanent": false
     },
     {
+      "source": "/inst",
+      "destination": "/?utm_source=instagram&utm_medium=bio",
+      "permanent": false
+    },
+    {
+      "source": "/inst/bio",
+      "destination": "/?utm_source=instagram&utm_medium=bio",
+      "permanent": false
+    },
+    {
+      "source": "/ig/bio",
+      "destination": "/?utm_source=instagram&utm_medium=bio",
+      "permanent": false
+    },
+    {
+      "source": "/inst/:name",
+      "destination": "/?utm_source=instagram&utm_medium=social&utm_campaign=:name",
+      "permanent": false
+    },
+    {
+      "source": "/yt",
+      "destination": "/?utm_source=youtube&utm_medium=bio",
+      "permanent": false
+    },
+    {
+      "source": "/yt/bio",
+      "destination": "/?utm_source=youtube&utm_medium=bio",
+      "permanent": false
+    },
+    {
+      "source": "/tiktok",
+      "destination": "/?utm_source=tiktok&utm_medium=bio",
+      "permanent": false
+    },
+    {
+      "source": "/tiktok/bio",
+      "destination": "/?utm_source=tiktok&utm_medium=bio",
+      "permanent": false
+    },
+    {
+      "source": "/tiktok/:name",
+      "destination": "/?utm_source=tiktok&utm_medium=video&utm_campaign=:name",
+      "permanent": false
+    },
+    {
       "source": "/ig",
       "destination": "/?utm_source=instagram&utm_medium=bio",
       "permanent": false
