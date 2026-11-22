@@ -42,7 +42,6 @@ export type UiText = {
   counter: (i: number, n: number) => string
   yes: string
   no: string
-  keyHint: string
   resultEyebrow: string
   chartTitle: string
   lowPrefix: string

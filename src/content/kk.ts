@@ -23,7 +23,6 @@ export const KK: Content = {
     counter: (i, n) => `${i}-сұрақ, барлығы ${n}`,
     yes: 'Иә',
     no: 'Жоқ',
-    keyHint: 'Кеңес: <b>1</b> — Иә, <b>2</b> — Жоқ',
     resultEyebrow: 'Сіздің нәтижеңіз',
     chartTitle: 'Нейромедиаторлар профилі',
     lowPrefix: 'Назар аударыңыз',

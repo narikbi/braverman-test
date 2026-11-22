@@ -21,7 +21,6 @@ export const RU: Content = {
     counter: (i, n) => `Вопрос ${i} из ${n}`,
     yes: 'Да',
     no: 'Нет',
-    keyHint: 'Подсказка: <b>1</b> — Да, <b>2</b> — Нет',
     resultEyebrow: 'Ваш результат',
     chartTitle: 'Профиль нейромедиаторов',
     lowPrefix: 'Зона внимания',

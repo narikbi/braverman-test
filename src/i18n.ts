@@ -54,7 +54,6 @@ export function applyStatic() {
   $('backBtn').textContent = u.back
   $('yesBtn').textContent = u.yes
   $('noBtn').textContent = u.no
-  $('t-keyHint').innerHTML = u.keyHint
 
   $('t-resultEyebrow').textContent = u.resultEyebrow
   $('t-chartTitle').textContent = u.chartTitle
